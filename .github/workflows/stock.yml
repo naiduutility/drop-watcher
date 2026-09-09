@@ -1,0 +1,66 @@
+name: Product Stock Watcher
+
+on:
+  schedule:
+    # Every 10 minutes. Each product also has its own "watch_from" date in
+    # products.json, so a run before that date is a no-op that makes no network
+    # calls at all — the start date is enforced in IST there, not here (cron is
+    # UTC, and GitHub's scheduler is best-effort and can run late).
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}   # lets you run it manually from the Actions tab
+
+# Separate group from the movie watcher: the two are independent and must not
+# block each other.
+concurrency:
+  group: stock-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Its own cache key. The movie watcher writes the same .state directory
+      # for its own ids, and two workflows sharing one key would clobber each
+      # other's markers.
+      - name: Restore alert state
+        uses: actions/cache/restore@v4
+        with:
+          path: .state
+          key: stock-alert-state-${{ github.run_id }}
+          restore-keys: |
+            stock-alert-state-
+
+      # NOTE: no `playwright install` here. A Shopify stock check is a plain
+      # HTTP GET, so this job never needs Chromium — it just needs the
+      # playwright package importable, which pip provides. That keeps the run
+      # to a few seconds.
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check product stock
+        env:
+          # Products live in products.json. NTFY_ACK_TOPIC defaults to
+          # "<NTFY_TOPIC>-ack" — only set the secret to override it.
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_ACK_TOPIC: ${{ secrets.NTFY_ACK_TOPIC }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          mkdir -p .state
+          python check.py --only products
+
+      # if: always() so an acknowledgement recorded before a later failure
+      # still persists.
+      - name: Save alert state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .state
+          key: stock-alert-state-${{ github.run_id }}

@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Playwright local browser cache (if you set PLAYWRIGHT_BROWSERS_PATH=0)
+ms-playwright/
+
+# Local env file — NEVER commit your ntfy topic / email
+.env
+
+# Acknowledgement markers - which movies you've already acked (runtime state)
+.state/
