@@ -5,5 +5,11 @@
     "url": "https://www.furjaden.com/products/the-dark-knight-batpack",
     "watch_from": "2026-09-14",
     "enabled": true
+  },
+  {
+    "id": "test-in-stock",
+    "name": "TEST - Classic Batman Batpack (remove after testing)",
+    "url": "https://www.furjaden.com/products/the-classic-batman-batpack",
+    "enabled": true
   }
 ]
