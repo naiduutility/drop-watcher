@@ -64,14 +64,17 @@ MOVIES_FILE = os.environ.get("MOVIES_FILE", "movies.json")
 PRODUCTS_FILE = os.environ.get("PRODUCTS_FILE", "products.json")
 STATE_DIR = os.environ.get("STATE_DIR", ".state")
 NTFY_SERVER = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
-NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")
+# .strip() because a topic pasted into a GitHub secret can pick up a trailing
+# space or newline. ntfy then rejects the publish with a 400, which used to be
+# swallowed into a green run that notified nobody.
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "").strip()
 # Topic the notification's ack button POSTs to. Defaults to "<topic>-ack".
 # NOTE: `or`, not a get() default — GitHub Actions sets an undefined secret to
 # an EMPTY STRING, which would otherwise silently disable acknowledgements.
 NTFY_ACK_TOPIC = os.environ.get("NTFY_ACK_TOPIC", "").strip() or (
     f"{NTFY_TOPIC}-ack" if NTFY_TOPIC else ""
 )
-ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "")  # optional email backup via ntfy
+ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "").strip()  # optional, via ntfy
 # Pause between a movie page and its showtimes page — two back-to-back loads
 # from one IP is what tripped Cloudflare during development.
 SHOWTIMES_DELAY_MS = int(os.environ.get("SHOWTIMES_DELAY_MS", "6000"))
@@ -252,10 +255,10 @@ def check_product(product):
 
 
 def send_product_alert(product, data, live):
-    """Push a back-in-stock alert carrying the same ack button as movies."""
+    """Push a back-in-stock alert. Returns True if ntfy accepted it."""
     if not NTFY_TOPIC:
         print("!! NTFY_TOPIC not set - cannot send notification", file=sys.stderr)
-        return
+        return False
 
     # Shopify prices are integer paise/cents.
     price = data.get("price")
@@ -264,7 +267,7 @@ def send_product_alert(product, data, live):
     if live and live != ["Default Title"]:
         variants = f"\nIn stock: {', '.join(live)}"
 
-    _publish(
+    return _publish(
         {
             "topic": NTFY_TOPIC,
             "title": f"{product['name']} is IN STOCK!",
@@ -537,6 +540,13 @@ def theatre_lines(movie, hits, venues, status="ok"):
 
 
 def _publish(payload):
+    """POST one notification. Returns True only if ntfy accepted it.
+
+    The caller MUST surface a False: delivering the alert is the whole job, so
+    a swallowed failure here is the worst possible bug — the run goes green
+    while you are never told. That is exactly what happened once, so failures
+    now propagate and fail the run.
+    """
     if ALERT_EMAIL:
         payload["email"] = ALERT_EMAIL
     req = urllib.request.Request(
@@ -547,9 +557,15 @@ def _publish(payload):
     )
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
-            print(f"   ntfy sent -> HTTP {resp.status}")
-    except Exception as e:  # never let a notify failure crash the run silently
-        print(f"!! ntfy send failed: {e}", file=sys.stderr)
+            ok = 200 <= resp.status < 300
+            print(f"   ntfy sent -> HTTP {resp.status} "
+                  f"(topic {payload.get('topic')!r})")
+            if not ok:
+                print(f"!! ntfy returned HTTP {resp.status}", file=sys.stderr)
+            return ok
+    except Exception as e:
+        print(f"!! ntfy send FAILED: {e}", file=sys.stderr)
+        return False
 
 
 def _actions_for(movie, label="Book now"):
@@ -569,14 +585,14 @@ def _actions_for(movie, label="Book now"):
 
 
 def send_alert(movie, hits=None, venues=None, status="ok"):
-    """Push a booking-open alert carrying an ack button for this movie."""
+    """Push a booking-open alert. Returns True if ntfy accepted it."""
     if not NTFY_TOPIC:
         print("!! NTFY_TOPIC not set - cannot send notification", file=sys.stderr)
-        return
+        return False
 
     # Published as JSON rather than via headers: metadata headers must be
     # latin-1 safe, which mangles non-ASCII movie titles.
-    _publish(
+    return _publish(
         {
             "topic": NTFY_TOPIC,
             "title": f"{movie['name']} tickets are LIVE in {movie['city']}!",
@@ -602,12 +618,12 @@ def send_theatre_alert(movie, fresh, hits, venues, status="ok"):
     """
     if not NTFY_TOPIC:
         print("!! NTFY_TOPIC not set - cannot send notification", file=sys.stderr)
-        return
+        return False
 
     names = ", ".join(
         v["name"] for w in fresh for v in hits.get(w, [])
     ) or ", ".join(fresh)
-    _publish(
+    return _publish(
         {
             "topic": NTFY_TOPIC,
             "title": f"{movie['name']}: {names} now has shows!",
@@ -857,8 +873,11 @@ def main():
 
         if in_stock:
             print(f">>> IN STOCK: {product['name']} - sending alert")
-            send_product_alert(product, data, live)
-            record_alerted(product["id"])
+            if send_product_alert(product, data, live):
+                record_alerted(product["id"])
+            else:
+                # An undelivered alert is a failed run, not a green one.
+                failures.append(f"{product['name']} (alert not delivered)")
         else:
             print(">>> still out of stock")
 
@@ -937,9 +956,14 @@ def main():
                 fresh = [w for w in hits if not theatre_seen(movie["id"], w)]
                 if fresh and has_alerted(movie["id"]):
                     print(f"   newly live theatre(s): {fresh}")
-                    send_theatre_alert(movie, fresh, hits, venues, status)
+                    sent = send_theatre_alert(movie, fresh, hits, venues, status)
                 else:
-                    send_alert(movie, hits, venues, status)
+                    sent = send_alert(movie, hits, venues, status)
+
+                if not sent:
+                    # An undelivered alert is a failed run, not a green one.
+                    failures.append(f"{movie['name']} (alert not delivered)")
+                    continue
 
                 record_alerted(movie["id"])
                 for w in hits:
