@@ -301,7 +301,14 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 |------------------|-------------------------------------------|----------|
 | `NTFY_TOPIC`     | alert topic, e.g. `bms-hyd-9f3k2x`        | ✅ yes   |
 | `NTFY_ACK_TOPIC` | ack topic, e.g. `bms-ack-7t1q8w`          | recommended (defaults to `<NTFY_TOPIC>-ack`) |
-| `ALERT_EMAIL`    | email for a backup alert via ntfy         | optional |
+| `ALERT_EMAIL`    | ⚠️ **leave this unset** — see below      | not usable on ntfy.sh |
+
+> **Do not set `ALERT_EMAIL` on ntfy.sh.** The public server refuses e-mail
+> for anonymous publishers (`{"code":40053,"error":"anonymous email sending is
+> not allowed"}`) and rejects the **whole** publish — so an optional backup
+> silently killed the actual push. The code now retries without the email so
+> the notification always lands, but the cleanest fix is to delete the secret.
+> E-mail needs an ntfy account and an auth token.
 
 ### 4. Enable + test
 - Repo → **Actions** tab → enable workflows if prompted.
@@ -351,8 +358,12 @@ know on the first run:
 
 - **Logs show the per-movie detection blocks** → working. ✅
 - **Run fails with "Page looks blocked / unrendered"** → the runner IP is being
-  challenged. Fallbacks, in order of effort:
-  1. Re-run — blocks are sometimes intermittent.
+  challenged. This is confirmed to happen *intermittently* on GitHub's runners:
+  the same runner loaded the page fine one run and got a 691-char Cloudflare
+  interstitial the next. Each movie is therefore retried `BMS_ATTEMPTS` times
+  (default 3) within a run, on a fresh browser context, before the run fails.
+  If it still fails, fallbacks in order of effort:
+  1. Re-run — blocks are often intermittent.
   2. Run the same `check.py` on a box with a residential/home IP (your laptop
      when on, a Raspberry Pi, or an Oracle Cloud Always-Free VM via cron).
   3. Route Playwright through a residential proxy (paid).

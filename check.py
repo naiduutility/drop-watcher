@@ -46,6 +46,7 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.request
 
 from playwright.sync_api import sync_playwright
@@ -74,7 +75,13 @@ NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "").strip()
 NTFY_ACK_TOPIC = os.environ.get("NTFY_ACK_TOPIC", "").strip() or (
     f"{NTFY_TOPIC}-ack" if NTFY_TOPIC else ""
 )
-ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "").strip()  # optional, via ntfy
+# Optional email backup. NOTE: ntfy.sh rejects e-mail sending for anonymous
+# publishers (code 40053) and fails the WHOLE publish, push included — so a
+# rejected email is retried without it rather than losing the notification.
+ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "").strip()
+# BMS challenges datacenter IPs intermittently; retry inside the run.
+BMS_ATTEMPTS = int(os.environ.get("BMS_ATTEMPTS", "3"))
+BMS_RETRY_DELAY_MS = int(os.environ.get("BMS_RETRY_DELAY_MS", "15000"))
 # Pause between a movie page and its showtimes page — two back-to-back loads
 # from one IP is what tripped Cloudflare during development.
 SHOWTIMES_DELAY_MS = int(os.environ.get("SHOWTIMES_DELAY_MS", "6000"))
@@ -549,23 +556,42 @@ def _publish(payload):
     """
     if ALERT_EMAIL:
         payload["email"] = ALERT_EMAIL
-    req = urllib.request.Request(
-        NTFY_SERVER + "/",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            ok = 200 <= resp.status < 300
-            print(f"   ntfy sent -> HTTP {resp.status} "
-                  f"(topic {payload.get('topic')!r})")
-            if not ok:
-                print(f"!! ntfy returned HTTP {resp.status}", file=sys.stderr)
-            return ok
-    except Exception as e:
-        print(f"!! ntfy send FAILED: {e}", file=sys.stderr)
-        return False
+
+    def attempt(body):
+        req = urllib.request.Request(
+            NTFY_SERVER + "/",
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                print(f"   ntfy sent -> HTTP {resp.status} "
+                      f"(topic {body.get('topic')!r})")
+                return 200 <= resp.status < 300, ""
+        except urllib.error.HTTPError as e:
+            # ntfy puts the real reason in the response body; the bare
+            # "HTTP Error 400: Bad Request" tells you nothing.
+            detail = ""
+            try:
+                detail = e.read().decode("utf-8", "replace").strip()
+            except Exception:
+                pass
+            print(f"!! ntfy send FAILED: HTTP {e.code} {detail[:300]}",
+                  file=sys.stderr)
+            return False, detail
+        except Exception as e:
+            print(f"!! ntfy send FAILED: {e}", file=sys.stderr)
+            return False, ""
+
+    ok, detail = attempt(payload)
+    if not ok and "email" in payload and "email sending is not allowed" in detail:
+        # An optional extra must never cost us the actual notification.
+        print("   retrying without the email backup "
+              "(ntfy.sh needs an account for e-mail)", file=sys.stderr)
+        payload.pop("email", None)
+        ok, _ = attempt(payload)
+    return ok
 
 
 def _actions_for(movie, label="Book now"):
@@ -807,6 +833,50 @@ USAGE = (
 )
 
 
+def new_context(browser):
+    return browser.new_context(
+        user_agent=USER_AGENT,
+        locale="en-IN",
+        timezone_id="Asia/Kolkata",
+        viewport={"width": 1366, "height": 900},
+    )
+
+
+def check_with_retries(browser, movie, context):
+    """check_page, retried when the page comes back as an anti-bot wall.
+
+    BMS challenges datacenter IPs *intermittently* — the same runner loaded
+    the page fine one run and got a 691-char Cloudflare interstitial the next.
+    Retrying inside the run, on a brand-new browser context, converts most of
+    those into a real answer instead of waiting 5 minutes for the next cron.
+
+    Returns (is_open, context) — the context may have been replaced, and the
+    caller still owns closing it.
+    """
+    last = None
+    for attempt in range(1, BMS_ATTEMPTS + 1):
+        try:
+            return check_page(context, movie), context
+        except Exception as e:
+            last = e
+            blocked = "blocked or unrendered" in str(e)
+            if attempt >= BMS_ATTEMPTS or not blocked:
+                raise
+            wait = BMS_RETRY_DELAY_MS * attempt  # linear backoff
+            print(f"   attempt {attempt}/{BMS_ATTEMPTS} looks blocked; "
+                  f"retrying in {wait // 1000}s with a fresh context",
+                  file=sys.stderr)
+            # A fresh context drops the cookies/fingerprint that got flagged.
+            context.close()
+            context = new_context(browser)
+            page = context.new_page()
+            try:
+                page.wait_for_timeout(wait)
+            finally:
+                page.close()
+    raise last
+
+
 def main():
     argv = sys.argv[1:]
 
@@ -911,7 +981,9 @@ def main():
                 # the theatre check opens a second page in it.
                 try:
                     try:
-                        is_open = check_page(context, movie)
+                        is_open, context = check_with_retries(
+                            browser, movie, context
+                        )
                     except Exception as e:
                         # Isolate failures: one blocked movie must not stop
                         # the rest.
