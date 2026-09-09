@@ -18,16 +18,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
 
       # Cache the downloaded Chromium so we don't re-download it every 5 min.
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ runner.os }}
@@ -37,7 +37,7 @@ jobs:
       # MUTABLE — cache entries are immutable per key, so each run saves under
       # a fresh run_id key and restores the newest via the restore-keys prefix.
       - name: Restore alert state
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .state
           key: bms-alert-state-${{ github.run_id }}
@@ -64,7 +64,7 @@ jobs:
       # check failed still persists.
       - name: Save alert state
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .state
           key: bms-alert-state-${{ github.run_id }}
