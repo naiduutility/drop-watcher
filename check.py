@@ -302,7 +302,11 @@ def showtimes_url(movie, when=None):
     for every screen format rather than the one BMS would auto-select; an
     optional per-movie "language" narrows a multi-language release.
     """
-    day = (when or datetime.date.today()).strftime("%Y%m%d")
+    # today_ist(), not date.today(): the runner is UTC, so between 00:00 and
+    # 05:30 IST a bare today() is still on YESTERDAY's date and BMS returns a
+    # showtimes payload with zero venues — which this code then reports as
+    # "no venues found", indistinguishable from a payload-shape change.
+    day = (when or today_ist()).strftime("%Y%m%d")
     base = movie["url"].split("?")[0].rstrip("/")
     # Rebuild as <...>/<slug>/buytickets/<ET code>/<date>, whatever trails the
     # movie URL.
