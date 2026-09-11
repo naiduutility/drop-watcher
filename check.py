@@ -433,22 +433,29 @@ def matched_venues(hits):
 
 
 # --- Acknowledgement state --------------------------------------------------
-def ack_marker(movie_id):
-    return os.path.join(STATE_DIR, f"acked-{movie_id}")
+# An ack id names one ALERT, not one movie: "ET00514163" is that movie's
+# booking-open alert, "ET00514163@amb" is its AMB theatre alert. Ids arrive
+# from a public ntfy topic, so they are untrusted input — anything outside
+# this character set could walk out of STATE_DIR via "..".
+ACK_ID_SAFE = re.compile(r"[^A-Za-z0-9@._-]+")
 
 
-def is_acked(movie_id):
-    return os.path.exists(ack_marker(movie_id))
+def ack_marker(ack_id):
+    return os.path.join(STATE_DIR, "acked-" + ACK_ID_SAFE.sub("-", ack_id))
 
 
-def record_ack(movie_id, source):
+def is_acked(ack_id):
+    return os.path.exists(ack_marker(ack_id))
+
+
+def record_ack(ack_id, source):
     os.makedirs(STATE_DIR, exist_ok=True)
-    path = ack_marker(movie_id)
+    path = ack_marker(ack_id)
     if os.path.exists(path):
         return
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"acked via {source}\n")
-    print(f"   ack recorded for {movie_id} (via {source})")
+    print(f"   ack recorded for {ack_id} (via {source})")
 
 
 def _touch(path, note):
@@ -474,17 +481,76 @@ def _slug(text):
     return re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-").lower()[:40] or "x"
 
 
+def theatre_ack_id(movie_id, wanted):
+    """Ack key for ONE theatre of one movie, e.g. ET00514163@amb.
+
+    Namespaced under the movie so "Got it" on a theatre alert silences that
+    theatre alone, and the booking-open ack no longer silences theatres.
+    """
+    return f"{movie_id}@{_slug(wanted)}"
+
+
+def all_ack_id(movie_id):
+    """Ack key for "stop everything about this movie", e.g. ET00514163@all.
+
+    Restores the original one-tap behaviour as an explicit choice: you tap it
+    once you have actually booked, and neither the booking-open alert nor any
+    theatre alert can come back.
+    """
+    return f"{movie_id}@all"
+
+
+def is_silenced(movie_id):
+    """True if the movie-wide stop button has been tapped."""
+    return is_acked(all_ack_id(movie_id))
+
+
+def pending_alerts(movie):
+    """This movie's alerts that are still un-acknowledged.
+
+    "open" is the booking-open alert; the rest are theatre entries. An empty
+    list means every alert for the movie has been acked and the movie can be
+    skipped entirely — the old whole-movie behaviour, except it now takes
+    N+1 taps instead of one.
+    """
+    if is_silenced(movie["id"]):
+        return []
+    jobs = ["open"] if not is_acked(movie["id"]) else []
+    jobs += [
+        w for w in movie.get("theatres", [])
+        if w.strip() and not is_acked(theatre_ack_id(movie["id"], w))
+    ]
+    return jobs
+
+
+def theatre_marker(movie_id, wanted):
+    return os.path.join(STATE_DIR, f"venue-{movie_id}-{_slug(wanted)}")
+
+
 def theatre_seen(movie_id, wanted):
-    return os.path.exists(
-        os.path.join(STATE_DIR, f"venue-{movie_id}-{_slug(wanted)}")
-    )
+    """True once this theatre has been reported live at least once."""
+    return os.path.exists(theatre_marker(movie_id, wanted))
 
 
-def record_theatre(movie_id, wanted):
-    _touch(
-        os.path.join(STATE_DIR, f"venue-{movie_id}-{_slug(wanted)}"),
-        f"theatre live: {wanted}",
-    )
+def record_theatre(movie_id, wanted, venues=()):
+    """Remember that this theatre went live, and under which venue name(s).
+
+    The names are stored because a theatre alert now repeats until it is
+    acked: once a theatre is known live, the repeat can name the venue from
+    this marker instead of reloading the showtimes page.
+    """
+    names = [v["name"] for v in venues] or [wanted]
+    _touch(theatre_marker(movie_id, wanted), "\n".join(names))
+
+
+def theatre_venue_names(movie_id, wanted):
+    try:
+        with open(theatre_marker(movie_id, wanted), encoding="utf-8") as f:
+            names = [ln.strip() for ln in f if ln.strip()]
+    except OSError:
+        return [wanted]
+    # Markers written before per-theatre alerts held a "theatre live: X" note.
+    return [n.split("theatre live: ")[-1] for n in names] or [wanted]
 
 
 def fetch_acks():
@@ -515,9 +581,9 @@ def fetch_acks():
             continue
         if msg.get("event") != "message":
             continue
-        movie_id = (msg.get("message") or "").strip()
-        if movie_id:
-            record_ack(movie_id, "ntfy ack button")
+        ack_id = (msg.get("message") or "").strip()
+        if ack_id:
+            record_ack(ack_id, "ntfy ack button")
 
 
 # --- Notification -----------------------------------------------------------
@@ -594,19 +660,41 @@ def _publish(payload):
     return ok
 
 
-def _actions_for(movie, label="Book now"):
+def _ack_action(label, ack_id):
+    return {
+        "action": "http",
+        "label": label,
+        "url": f"{NTFY_SERVER}/{NTFY_ACK_TOPIC}",
+        "method": "POST",
+        "body": ack_id,
+        "clear": True,
+    }
+
+
+def _actions_for(movie, label="Book now", ack_id=None,
+                 ack_label="Got it - stop alerts", all_button=False):
+    """Buttons for one notification.
+
+    `ack_id` is what the narrow ack button POSTs, and so decides what gets
+    silenced: the movie id for the booking-open alert, a per-theatre id for a
+    theatre alert. Defaults to the movie so products and ad-hoc sends are
+    unchanged.
+
+    `all_button` adds the movie-wide stop on top of it — "I have booked, I am
+    done with this film" — which is the only way to silence a theatre you have
+    not been told about yet.
+
+    NOTE: ntfy allows a MAXIMUM OF 3 actions per notification, and a movie
+    alert now uses all three (view + narrow ack + stop-all). A fourth is
+    rejected outright, taking the whole publish with it.
+    """
     actions = [{"action": "view", "label": label, "url": movie["url"]}]
     if NTFY_ACK_TOPIC:
-        actions.append(
-            {
-                "action": "http",
-                "label": "Got it - stop alerts",
-                "url": f"{NTFY_SERVER}/{NTFY_ACK_TOPIC}",
-                "method": "POST",
-                "body": movie["id"],
-                "clear": True,
-            }
-        )
+        actions.append(_ack_action(ack_label, ack_id or movie["id"]))
+        if all_button:
+            actions.append(
+                _ack_action("Booked - stop all", all_ack_id(movie["id"]))
+            )
     return actions
 
 
@@ -630,38 +718,51 @@ def send_alert(movie, hits=None, venues=None, status="ok"):
             "priority": 5,
             "tags": ["rotating_light"],
             "click": movie["url"],
-            "actions": _actions_for(movie),
+            "actions": _actions_for(
+                movie, "Book now",
+                ack_label="Got it - open alert", all_button=True,
+            ),
         }
     )
 
 
-def send_theatre_alert(movie, fresh, hits, venues, status="ok"):
-    """Push the follow-up alert: a preferred theatre just came online.
+def send_theatre_alert(movie, wanted, names, first_time):
+    """Push an alert about ONE preferred theatre.
 
-    `fresh` are the wanted entries that matched for the first time. Sent
-    INSTEAD of that run's repeat alert, so a new theatre never costs you an
-    extra notification.
+    One notification per theatre, each carrying its own ack id, so "Got it"
+    here silences this theatre and nothing else — not the movie, not the
+    other theatres. Like the booking-open alert it therefore repeats every
+    run until it is acked; `first_time` only changes the wording.
     """
     if not NTFY_TOPIC:
         print("!! NTFY_TOPIC not set - cannot send notification", file=sys.stderr)
         return False
 
-    names = ", ".join(
-        v["name"] for w in fresh for v in hits.get(w, [])
-    ) or ", ".join(fresh)
+    shown = ", ".join(names) or wanted
+    title = (
+        f"{movie['name']}: {shown} now has shows!" if first_time
+        else f"{movie['name']}: still showing at {shown}"
+    )
+    lead = (
+        "A theatre you asked about just came online"
+        if first_time else "Reminder - a theatre you asked about has shows"
+    )
     return _publish(
         {
             "topic": NTFY_TOPIC,
-            "title": f"{movie['name']}: {names} now has shows!",
+            "title": title,
             "message": (
-                f"A theatre you asked about just came online in {movie['city']}."
-                f"\n{movie['url']}"
-                + theatre_lines(movie, hits, venues, status)
+                f"{lead} in {movie['city']}.\n{movie['url']}"
+                "\n\n\"Got it\" stops this theatre only; "
+                "\"Booked - stop all\" stops the whole movie."
             ),
             "priority": 5,
             "tags": ["performing_arts"],
             "click": movie["url"],
-            "actions": _actions_for(movie),
+            "actions": _actions_for(
+                movie, "Book now", theatre_ack_id(movie["id"], wanted),
+                ack_label="Got it - this theatre", all_button=True,
+            ),
         }
     )
 
@@ -918,11 +1019,19 @@ def main():
 
     fetch_acks()
 
-    pending = [m for m in targets if not is_acked(m["id"])]
+    # A movie is done only when its booking-open alert AND every one of its
+    # theatres has been acked — acking the open alert no longer takes the
+    # theatres down with it.
+    pending = [m for m in targets if pending_alerts(m)]
     pending_products = [p for p in products if not is_acked(p["id"])]
-    for t in targets + products:
-        if is_acked(t["id"]):
-            print(f"-- skipping (already acknowledged): {t['name']}")
+    for m in targets:
+        if not pending_alerts(m):
+            why = ("booked - all alerts stopped" if is_silenced(m["id"])
+                   else "every alert acknowledged")
+            print(f"-- skipping ({why}): {m['name']}")
+    for p in products:
+        if is_acked(p["id"]):
+            print(f"-- skipping (already acknowledged): {p['name']}")
     if not pending and not pending_products:
         print("Everything has been acknowledged - nothing to watch.")
         return
@@ -977,20 +1086,42 @@ def main():
                     timezone_id="Asia/Kolkata",
                     viewport={"width": 1366, "height": 900},
                 )
+                open_pending = not is_acked(movie["id"])
+                # Theatre entries still owed an alert (i.e. not acked).
+                wanted = [
+                    w for w in movie["theatres"]
+                    if w.strip()
+                    and not is_acked(theatre_ack_id(movie["id"], w))
+                ]
+                # Only theatres never yet seen live need the showtimes page —
+                # a known-live one re-alerts from its marker, for free.
+                outstanding = [
+                    w for w in wanted if not theatre_seen(movie["id"], w)
+                ]
+
                 # The context must outlive the whole per-movie body, because
                 # the theatre check opens a second page in it.
                 try:
-                    try:
-                        is_open, context = check_with_retries(
-                            browser, movie, context
-                        )
-                    except Exception as e:
-                        # Isolate failures: one blocked movie must not stop
-                        # the rest.
-                        print(f"!! check failed for {movie['name']}: {e}",
-                              file=sys.stderr)
-                        failures.append(movie["name"])
-                        continue
+                    if has_alerted(movie["id"]):
+                        # Booking-open never reverts and we have already said
+                        # so. Skipping the movie page matters more now that a
+                        # movie stays in play after its open alert is acked:
+                        # that page is the main Cloudflare exposure.
+                        print("   booking already known open - "
+                              "skipping detection")
+                        is_open = True
+                    else:
+                        try:
+                            is_open, context = check_with_retries(
+                                browser, movie, context
+                            )
+                        except Exception as e:
+                            # Isolate failures: one blocked movie must not stop
+                            # the rest.
+                            print(f"!! check failed for {movie['name']}: {e}",
+                                  file=sys.stderr)
+                            failures.append(movie["name"])
+                            continue
 
                     if not is_open:
                         print(">>> not open yet")
@@ -998,22 +1129,19 @@ def main():
 
                     print(f">>> BOOKING OPEN for {movie['name']}")
 
-                    # Only load the showtimes page if theatres were requested,
-                    # and only while some are still unaccounted for — every
-                    # extra load is extra anti-bot exposure.
-                    wanted = [w for w in movie["theatres"] if w.strip()]
-                    outstanding = [
-                        w for w in wanted if not theatre_seen(movie["id"], w)
-                    ]
+                    # Only load the showtimes page while some theatre is still
+                    # unaccounted for — every extra load is extra anti-bot
+                    # exposure.
                     venues, hits, status = None, {}, "ok"
-                    if wanted and not outstanding:
+                    if not outstanding:
                         status = "all-live"
-                        print("   all your theatres already live - skipping "
-                              "theatre check")
-                    elif wanted:
+                        if movie["theatres"]:
+                            print("   nothing left to look up - skipping "
+                                  "theatre check")
+                    else:
                         try:
                             venues = scrape_venues(context, movie)
-                            hits = match_theatres(venues, wanted)
+                            hits = match_theatres(venues, outstanding)
                             print(f"   venues listed   : {len(venues)}")
                             print(f"   yours with shows: "
                                   f"{[v['name'] for v in matched_venues(hits)]}")
@@ -1025,21 +1153,35 @@ def main():
                 finally:
                     context.close()
 
-                fresh = [w for w in hits if not theatre_seen(movie["id"], w)]
-                if fresh and has_alerted(movie["id"]):
-                    print(f"   newly live theatre(s): {fresh}")
-                    sent = send_theatre_alert(movie, fresh, hits, venues, status)
-                else:
-                    sent = send_alert(movie, hits, venues, status)
+                # The booking-open alert and each theatre alert are now
+                # independent notifications with independent acks, so a run
+                # can legitimately send several.
+                if open_pending:
+                    if send_alert(movie, hits, venues, status):
+                        record_alerted(movie["id"])
+                    else:
+                        # An undelivered alert is a failed run, not a green one.
+                        failures.append(
+                            f"{movie['name']} (open alert not delivered)"
+                        )
 
-                if not sent:
-                    # An undelivered alert is a failed run, not a green one.
-                    failures.append(f"{movie['name']} (alert not delivered)")
-                    continue
-
-                record_alerted(movie["id"])
-                for w in hits:
-                    record_theatre(movie["id"], w)
+                for w in wanted:
+                    first_time = w in hits and not theatre_seen(movie["id"], w)
+                    if first_time:
+                        names = [v["name"] for v in hits[w]]
+                    elif theatre_seen(movie["id"], w):
+                        names = theatre_venue_names(movie["id"], w)
+                    else:
+                        continue  # not live yet
+                    print(f"   theatre alert: {w} "
+                          f"({'new' if first_time else 'repeat'})")
+                    if send_theatre_alert(movie, w, names, first_time):
+                        if first_time:
+                            record_theatre(movie["id"], w, hits[w])
+                    else:
+                        failures.append(
+                            f"{movie['name']} / {w} (alert not delivered)"
+                        )
         finally:
             browser.close()
 
