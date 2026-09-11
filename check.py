@@ -146,6 +146,9 @@ def load_targets():
                 "url": BMS_URL,
                 "theatres": [],
                 "language": os.environ.get("LANGUAGE", ""),
+                "book_code": "",
+                "show_date": "",
+                "showtimes_url": "",
             }
         ]
 
@@ -166,6 +169,13 @@ def load_targets():
                 "url": url,
                 "theatres": entry.get("theatres") or [],
                 "language": entry.get("language", ""),
+                # The movie page's ET code is NOT always the one the
+                # showtimes path uses — a regional/format sub-event gets its
+                # own. "id" stays the ack key; "book_code" is only for
+                # building the buytickets URL.
+                "book_code": entry.get("book_code", ""),
+                "show_date": entry.get("show_date", ""),
+                "showtimes_url": entry.get("showtimes_url", ""),
             }
         )
     return targets
@@ -306,15 +316,56 @@ def showtimes_url(movie, when=None):
     # 05:30 IST a bare today() is still on YESTERDAY's date and BMS returns a
     # showtimes payload with zero venues — which this code then reports as
     # "no venues found", indistinguishable from a payload-shape change.
-    day = (when or today_ist()).strftime("%Y%m%d")
+    # Full override wins: paste the URL BMS itself gave you and nothing is
+    # guessed. It pins the date, so it needs editing once that date passes.
+    if movie.get("showtimes_url"):
+        return movie["showtimes_url"]
+
+    day = showtime_date(movie, when).strftime("%Y%m%d")
     base = movie["url"].split("?")[0].rstrip("/")
     # Rebuild as <...>/<slug>/buytickets/<ET code>/<date>, whatever trails the
     # movie URL.
     head = base.rsplit("/", 1)[0] if re.search(r"/ET\d+$", base) else base
-    url = f"{head}/buytickets/{movie['id']}/{day}?etCodes=*"
+    # The BOOKING event code, which for a re-release or a per-language event is
+    # NOT the movie page's code: .../movies/.../ET00514163 lists its shows
+    # under .../buytickets/ET00516728/... . Getting this wrong returns a page
+    # with zero venue records and no error at all.
+    code = movie.get("book_code") or movie["id"]
+    url = f"{head}/buytickets/{code}/{day}?etCodes=*"
     if movie.get("language"):
         url += f"&language={movie['language']}"
+    if code != movie["id"]:
+        url += f"&refEventCode={code}"
     return url
+
+
+def showtime_date(movie, when=None):
+    """Which date's showtimes to read.
+
+    Defaults to today (IST), which is right for a film already running. A
+    movie whose booking has opened for a FUTURE release date has no shows
+    today, so set "show_date" to that date — otherwise every run reads an
+    empty page and reports no venues.
+
+    "show_date" is a FLOOR, not a fixed date: once it has passed, the check
+    rolls forward to today on its own. A hard date would keep asking for a
+    day in the past, whose showtimes page is empty — the same silent
+    zero-venue failure the field exists to avoid.
+    """
+    if when:
+        return when
+    raw = (movie.get("show_date") or "").strip()
+    if raw:
+        try:
+            return max(
+                datetime.datetime.strptime(raw, "%Y-%m-%d").date(),
+                today_ist(),
+            )
+        except ValueError:
+            # Fail open to today rather than skipping the check entirely.
+            print(f"!! bad show_date {raw!r} for {movie.get('name')} - "
+                  "using today", file=sys.stderr)
+    return today_ist()
 
 
 # Venue records inside the showtimes page's embedded state, e.g.
@@ -375,10 +426,19 @@ def scrape_venues(context, movie, when=None):
 
     venues = parse_venues(html)
     if not venues:
-        # Booking is open, so there should be venues. Zero means the payload
-        # shape changed — report that rather than "none of yours".
+        # Zero venues has two very different causes, and "no venues found" on
+        # its own cannot tell them apart, so count the raw keys:
+        #   0 keys  -> BMS listed no shows at all for this date/language, i.e.
+        #              booking is not really open (or opened for a later date)
+        #   n keys  -> the shows exist but VENUE_RE no longer matches the
+        #              payload shape, and the regex needs updating
+        codes = html.count('"venueCode"')
+        names = html.count('"venueName"')
         raise RuntimeError(
-            f"no venues found in showtimes payload ({len(html)} chars)"
+            f"no venues parsed from showtimes payload ({len(html)} chars, "
+            f"venueCode keys={codes}, venueName keys={names}) - "
+            + ("no shows listed for this date/language"
+               if codes == 0 else "payload shape changed, VENUE_RE is stale")
         )
     return venues
 
