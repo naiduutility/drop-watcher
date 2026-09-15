@@ -145,6 +145,7 @@ def load_targets():
                 "city": CITY,
                 "url": BMS_URL,
                 "theatres": [],
+                "screens": [],
                 "language": os.environ.get("LANGUAGE", ""),
                 "book_code": "",
                 "show_date": "",
@@ -168,6 +169,7 @@ def load_targets():
                 "city": entry.get("city", CITY),
                 "url": url,
                 "theatres": entry.get("theatres") or [],
+                "screens": entry.get("screens") or [],
                 "language": entry.get("language", ""),
                 # The movie page's ET code is NOT always the one the
                 # showtimes path uses — a regional/format sub-event gets its
@@ -330,11 +332,15 @@ def showtimes_url(movie, when=None):
     # NOT the movie page's code: .../movies/.../ET00514163 lists its shows
     # under .../buytickets/ET00516728/... . Getting this wrong returns a page
     # with zero venue records and no error at all.
-    code = movie.get("book_code") or movie["id"]
+    # Fall back to the code in the movie URL, never to movie["id"]: the id is
+    # only the acknowledgement key and may be set to anything, which would
+    # silently point this URL at an event that does not exist.
+    page_code = movie_id_from_url(movie["url"])
+    code = movie.get("book_code") or page_code
     url = f"{head}/buytickets/{code}/{day}?etCodes=*"
     if movie.get("language"):
         url += f"&language={movie['language']}"
-    if code != movie["id"]:
+    if code != page_code:
         url += f"&refEventCode={code}"
     return url
 
@@ -371,22 +377,95 @@ def showtime_date(movie, when=None):
 # Venue records inside the showtimes page's embedded state, e.g.
 #   "venueCode":"PRHN", ... ,"venueName":"Prasads Multiplex: Hyderabad"
 VENUE_RE = re.compile(r'"venueCode":"([^"]+)"[^{}]*?"venueName":"([^"]+)"')
+# One venue card per listed cinema. Splitting the payload on this marker is
+# what lets a screen be attributed to the venue running it — screens live in
+# the showtime objects nested inside the card, not next to the venue name.
+VENUE_CARD = '"type":"venue-card"'
+# Per-showtime screen format. Both keys carry it; `format` is the richer of
+# the two — "Telugu • 2D | PCX SCREEN" against screenAttr's bare
+# "PCX SCREEN" — so a 2D and a 3D IMAX show stay distinguishable.
+SCREEN_ATTR_RE = re.compile(r'"screenAttr":"([^"]+)"')
+SCREEN_FORMAT_RE = re.compile(r'"format":"([^"]*•[^"]*)"')
+
+
+def parse_screens(segment):
+    """Unique screen formats inside one venue card, in payload order."""
+    labels = SCREEN_FORMAT_RE.findall(segment) or SCREEN_ATTR_RE.findall(segment)
+    out, seen = [], set()
+    for label in labels:
+        key = _normalise(label)
+        if key and key not in seen:
+            seen.add(key)
+            out.append(label)
+    return out
 
 
 def parse_venues(html):
-    """Pull [{name, code}] out of a showtimes page's embedded state.
+    """Pull [{name, code, screens}] out of a showtimes page's embedded state.
 
     Read from the page payload, NOT the rendered DOM: the venue list is
     virtualised, so scrolling it only ever mounts a handful of rows and
     scrolling past unmounts them all. Scraping anchors gave a page-wide cinema
     widget instead — the same 10 venues for every movie.
+
+    `screens` is None — not [] — when the card layout could not be read at
+    all. The distinction matters: "we could not read this venue's screens"
+    must never be reported as "this venue is not running your screen", or a
+    payload change would silence a screen watch forever.
     """
     venues, seen = [], set()
+    for segment in html.split(VENUE_CARD)[1:]:
+        m = VENUE_RE.search(segment)
+        if not m or m.group(1) in seen:
+            continue
+        seen.add(m.group(1))
+        venues.append({"name": m.group(2), "code": m.group(1),
+                       "screens": parse_screens(segment)})
+    if venues:
+        return venues
+    # Card layout changed: fall back to the flat venue scan, which still finds
+    # every venue but can no longer say which screen each one is running.
     for code, name in VENUE_RE.findall(html):
         if code not in seen:
             seen.add(code)
-            venues.append({"name": name, "code": code})
+            venues.append({"name": name, "code": code, "screens": None})
     return venues
+
+
+def watchlist(movie):
+    """Expand a movie's `theatres` into flat [{venue, screen, label}] items.
+
+    An entry is either a plain venue string (that venue on any screen) or an
+    object naming the screens that matter there:
+
+        "theatres": ["AAA Cinemas",
+                     {"venue": "AMBH", "screens": ["IMAX", "4DX"]}]
+
+    A movie-level "screens" list applies to every plain-string entry, for the
+    common case of wanting one format across all your theatres.
+
+    One item per venue+screen pair, because each is separately worth an alert
+    and its own ack: AMB's Screen 1 opening is its own news even when AMB's
+    Screen 3 has been live for days.
+    """
+    default = [x for x in (movie.get("screens") or []) if str(x).strip()]
+    items = []
+    for entry in movie.get("theatres") or []:
+        if isinstance(entry, dict):
+            venue = str(entry.get("venue") or entry.get("theatre") or "").strip()
+            screens = [x for x in (entry.get("screens") or []) if str(x).strip()]
+        else:
+            venue, screens = str(entry or "").strip(), default
+        if not venue:
+            continue
+        for screen in screens or [None]:
+            screen = str(screen).strip() if screen else None
+            items.append({
+                "venue": venue,
+                "screen": screen,
+                "label": f"{venue} ({screen})" if screen else venue,
+            })
+    return items
 
 
 def scrape_venues(context, movie, when=None):
@@ -443,57 +522,87 @@ def scrape_venues(context, movie, when=None):
     return venues
 
 
-def _normalise_venue(name):
+def _normalise(name):
     """Lowercase and drop apostrophes, so Prasad's == Prasads."""
     return name.lower().replace("'", "").replace("’", "")
+
+
+def _all_words_in(entry, text):
+    """Does every word of `entry` appear as a whole word in `text`?
+
+    Order and punctuation are ignored, so "allu cinemas kokapet" matches
+    "Allu Cinemas: Kokapet" — which plain substring matching would miss,
+    because BMS writes venues as "Name: Location".
+
+    Whole words, not substrings, keep "AMB" off "Ambica Theatre".
+    """
+    words = re.findall(r"[a-z0-9]+", _normalise(entry))
+    if not words:
+        return False
+    hay = _normalise(text)
+    return all(re.search(r"\b" + re.escape(w) + r"\b", hay) for w in words)
 
 
 def theatre_matches(entry, venue):
     """Does one movies.json theatre entry match one venue?
 
-    Either the exact venue code, or EVERY word of the entry appearing as a
-    whole word in the venue name — order and punctuation ignored. BMS writes
-    venues as "Name: Location", so plain substring matching fails on natural
-    phrasing: "allu cinemas kokapet" is not a substring of
-    "Allu Cinemas: Kokapet", but its words all appear in it.
-
-    Whole words, not substrings, keep "AMB" off "Ambica Theatre".
+    Either the exact venue code, or every word of the entry appearing as a
+    whole word in the venue name.
     """
     if entry.strip().upper() == venue["code"].upper():
         return True
-    words = re.findall(r"[a-z0-9]+", _normalise_venue(entry))
-    if not words:
-        return False
-    name = _normalise_venue(venue["name"])
-    return all(re.search(r"\b" + re.escape(w) + r"\b", name) for w in words)
+    return _all_words_in(entry, venue["name"])
 
 
-def match_theatres(venues, wanted):
-    """Map each wanted entry -> the venues it matches.
+def screen_matches(entry, venue):
+    """Is the wanted screen among the formats this venue is running?
 
-    Keyed by the entry you wrote, so "which of my theatres are live" survives
-    BMS renaming a venue.
+    Same word rule as venues, so "PXL" matches "Telugu • 2D | PXL", "PCX"
+    matches "PCX SCREEN", and "dolby cinema" matches
+    "Telugu • DOLBY CINEMA 2D | DOLBY CINEMA" — while none of them match a
+    plain 2D screen.
+
+    False when the venue's screens are unknown or empty — never a match on
+    a guess. The caller reports that case separately, because "could not read
+    the screens" and "that screen is not running" must not look alike.
+    """
+    return any(_all_words_in(entry, x) for x in (venue.get("screens") or []))
+
+
+def match_watchlist(venues, items):
+    """Map each watch item's label -> the venues satisfying it.
+
+    Keyed by the label you wrote rather than by venue, so "which of my
+    theatres and screens are live" survives BMS renaming a venue.
     """
     hits = {}
-    for w in wanted:
-        w = (w or "").strip()
-        if not w:
-            continue
-        found = [v for v in venues if theatre_matches(w, v)]
+    for item in items:
+        found = [v for v in venues if theatre_matches(item["venue"], v)]
+        if item["screen"]:
+            found = [v for v in found if screen_matches(item["screen"], v)]
         if found:
-            hits[w] = found
+            hits[item["label"]] = found
     return hits
 
 
-def matched_venues(hits):
-    """Flatten a match map to a unique, ordered venue list."""
-    out, seen = [], set()
-    for venues in hits.values():
-        for v in venues:
-            if v["code"] not in seen:
-                seen.add(v["code"])
-                out.append(v)
-    return out
+def screens_at(venues, item):
+    """Screens running at the venues matching this item's venue.
+
+    None when the venue is not listed at all; [] when it is listed but its
+    screens could not be read. That split is what makes a "still waiting"
+    line useful: "AMB is listed, running only Screen 3" is very different
+    news from "AMB is not listed yet".
+    """
+    listed, screens, seen = False, [], set()
+    for v in venues:
+        if not theatre_matches(item["venue"], v):
+            continue
+        listed = True
+        for label in v.get("screens") or []:
+            if _normalise(label) not in seen:
+                seen.add(_normalise(label))
+                screens.append(label)
+    return screens if listed else None
 
 
 # --- Acknowledgement state --------------------------------------------------
@@ -546,10 +655,13 @@ def _slug(text):
 
 
 def theatre_ack_id(movie_id, wanted):
-    """Ack key for ONE theatre of one movie, e.g. ET00514163@amb.
+    """Ack key for ONE watch item of one movie.
 
-    Namespaced under the movie so "Got it" on a theatre alert silences that
-    theatre alone, and the booking-open ack no longer silences theatres.
+    `wanted` is a watchlist label, so a screen gets its own key:
+    "ET00514163@ambh-hdr-by-barco" is AMB's Screen 1, distinct from the same
+    venue's other screens. Namespaced under the movie so "Got it" on one
+    alert silences that one alone, and the booking-open ack no longer
+    silences theatres.
     """
     return f"{movie_id}@{_slug(wanted)}"
 
@@ -581,8 +693,8 @@ def pending_alerts(movie):
         return []
     jobs = ["open"] if not is_acked(movie["id"]) else []
     jobs += [
-        w for w in movie.get("theatres", [])
-        if w.strip() and not is_acked(theatre_ack_id(movie["id"], w))
+        i["label"] for i in watchlist(movie)
+        if not is_acked(theatre_ack_id(movie["id"], i["label"]))
     ]
     return jobs
 
@@ -652,28 +764,51 @@ def fetch_acks():
 
 # --- Notification -----------------------------------------------------------
 def theatre_lines(movie, hits, venues, status="ok"):
-    """The 'which of your theatres are live' section of an alert body.
+    """The 'which of your theatres and screens are live' alert section.
 
     `status` distinguishes the reasons we may have no venue data, so a skipped
     check never masquerades as a failed one.
     """
-    if not movie.get("theatres"):
+    items = watchlist(movie)
+    if not items:
         return ""
     if status == "all-live":
-        live = ", ".join(w for w in movie["theatres"] if w.strip())
+        live = ", ".join(i["label"] for i in items)
         return f"\n\nAll your theatres already have shows: {live}"
     if venues is None:
         return "\n\n(Could not read the theatre list this run.)"
-    mine = matched_venues(hits)
-    if mine:
-        names = "\n".join(f"  - {v['name']}" for v in mine)
-        missing = [w for w in movie["theatres"] if w.strip() and w not in hits]
-        tail = f"\nStill waiting on: {', '.join(missing)}" if missing else ""
-        return f"\n\nYour theatres with shows ({len(mine)}):\n{names}{tail}"
-    return (
-        f"\n\nNone of your theatres yet ({len(venues)} other venue(s) listed). "
-        "Theatres are onboarded progressively, so yours may appear later."
-    )
+
+    live, waiting, seen = [], [], set()
+    for item in items:
+        if item["label"] in hits:
+            for v in hits[item["label"]]:
+                line = v["name"] + (f" - {item['screen']}" if item["screen"] else "")
+                if line not in seen:
+                    seen.add(line)
+                    live.append(line)
+            continue
+        running = screens_at(venues, item)
+        if running is None:
+            waiting.append(f"  - {item['label']}: not listed yet")
+        elif not running:
+            # Listed, but its screens could not be read - say so rather than
+            # implying the screen you want is definitely absent.
+            waiting.append(f"  - {item['label']}: listed, screens unreadable")
+        else:
+            # The useful case: the theatre is live, just not on your screen.
+            waiting.append(f"  - {item['label']}: listed, running "
+                           + ", ".join(running))
+
+    if live:
+        body = (f"\n\nYour theatres with shows ({len(live)}):\n"
+                + "\n".join(f"  - {x}" for x in live))
+    else:
+        body = (f"\n\nNone of your theatres yet ({len(venues)} other venue(s) "
+                "listed). Theatres are onboarded progressively, so yours may "
+                "appear later.")
+    if waiting:
+        body += "\n\nStill waiting on:\n" + "\n".join(waiting)
+    return body
 
 
 def _publish(payload):
@@ -790,13 +925,14 @@ def send_alert(movie, hits=None, venues=None, status="ok"):
     )
 
 
-def send_theatre_alert(movie, wanted, names, first_time):
-    """Push an alert about ONE preferred theatre.
+def send_theatre_alert(movie, wanted, names, first_time, what="theatre"):
+    """Push an alert about ONE watched theatre or screen.
 
-    One notification per theatre, each carrying its own ack id, so "Got it"
-    here silences this theatre and nothing else — not the movie, not the
-    other theatres. Like the booking-open alert it therefore repeats every
-    run until it is acked; `first_time` only changes the wording.
+    One notification per watch item, each carrying its own ack id, so "Got it"
+    here silences this item and nothing else — not the movie, not the other
+    theatres, and not the same venue's other screens. Like the booking-open
+    alert it therefore repeats every run until it is acked; `first_time` only
+    changes the wording.
     """
     if not NTFY_TOPIC:
         print("!! NTFY_TOPIC not set - cannot send notification", file=sys.stderr)
@@ -808,8 +944,8 @@ def send_theatre_alert(movie, wanted, names, first_time):
         else f"{movie['name']}: still showing at {shown}"
     )
     lead = (
-        "A theatre you asked about just came online"
-        if first_time else "Reminder - a theatre you asked about has shows"
+        f"A {what} you asked about just came online"
+        if first_time else f"Reminder - a {what} you asked about has shows"
     )
     return _publish(
         {
@@ -817,7 +953,7 @@ def send_theatre_alert(movie, wanted, names, first_time):
             "title": title,
             "message": (
                 f"{lead} in {movie['city']}.\n{movie['url']}"
-                "\n\n\"Got it\" stops this theatre only; "
+                f"\n\n\"Got it\" stops this {what} only; "
                 "\"Booked - stop all\" stops the whole movie."
             ),
             "priority": 5,
@@ -971,23 +1107,43 @@ def list_venues_cli(argv):
         "entry must appear as a whole word in the venue name — or use the "
         "**code** for an exact, rename-proof match.",
         "",
+        "**Screens** are the formats each venue is running *this* movie on, "
+        "matched by the same word rule. Copy one into a theatre's `screens` "
+        "to be told when that screen in particular opens:",
+        "",
+        "```json",
+        '{"venue": "AMBH", "screens": ["HDR By Barco"]}',
+        "```",
+        "",
+        "The screen list is per movie, not per venue — a cinema's IMAX screen "
+        "only appears here while it is running the movie this was captured "
+        "from.",
+        "",
         "Regenerate with:",
         "",
         "```",
         "python check.py --venues <a currently-bookable movie URL>",
         "```",
         "",
-        "| Venue | Code |",
-        "|-------|------|",
+        "| Venue | Code | Screens |",
+        "|-------|------|---------|",
     ]
     for v in sorted(venues, key=lambda x: x["name"].lower()):
-        lines.append(f"| {v['name']} | `{v['code']}` |")
+        screens = v.get("screens")
+        # BMS writes a format as "Telugu • 2D | PCX SCREEN" - that pipe would
+        # end the table cell, so escape it.
+        cell = ("?" if screens is None
+                else "<br>".join(f"`{x}`".replace("|", r"\|") for x in screens)
+                or "—")
+        lines.append(f"| {v['name']} | `{v['code']}` | {cell} |")
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
 
     print(f"\n{len(venues)} venues -> {out}")
     for v in sorted(venues, key=lambda x: x["name"].lower())[:8]:
-        print(f"   {v['name']}  [{v['code']}]")
+        screens = v.get("screens")
+        print(f"   {v['name']}  [{v['code']}]  "
+              f"{'?' if screens is None else ', '.join(screens)}")
     print("   ...")
 
 
@@ -1151,16 +1307,16 @@ def main():
                     viewport={"width": 1366, "height": 900},
                 )
                 open_pending = not is_acked(movie["id"])
-                # Theatre entries still owed an alert (i.e. not acked).
+                # Watch items (venue + screen) still owed an alert.
                 wanted = [
-                    w for w in movie["theatres"]
-                    if w.strip()
-                    and not is_acked(theatre_ack_id(movie["id"], w))
+                    i for i in watchlist(movie)
+                    if not is_acked(theatre_ack_id(movie["id"], i["label"]))
                 ]
-                # Only theatres never yet seen live need the showtimes page —
+                # Only items never yet seen live need the showtimes page —
                 # a known-live one re-alerts from its marker, for free.
                 outstanding = [
-                    w for w in wanted if not theatre_seen(movie["id"], w)
+                    i for i in wanted
+                    if not theatre_seen(movie["id"], i["label"])
                 ]
 
                 # The context must outlive the whole per-movie body, because
@@ -1205,10 +1361,13 @@ def main():
                     else:
                         try:
                             venues = scrape_venues(context, movie)
-                            hits = match_theatres(venues, outstanding)
+                            hits = match_watchlist(venues, outstanding)
                             print(f"   venues listed   : {len(venues)}")
-                            print(f"   yours with shows: "
-                                  f"{[v['name'] for v in matched_venues(hits)]}")
+                            print(f"   yours with shows: {sorted(hits)}")
+                            for i in outstanding:
+                                if i["label"] not in hits:
+                                    print(f"   still waiting   : {i['label']} "
+                                          f"(running {screens_at(venues, i)})")
                         except Exception as e:
                             # A theatre-list failure must never suppress the
                             # booking-open alert itself.
@@ -1229,22 +1388,30 @@ def main():
                             f"{movie['name']} (open alert not delivered)"
                         )
 
-                for w in wanted:
-                    first_time = w in hits and not theatre_seen(movie["id"], w)
+                for item in wanted:
+                    label = item["label"]
+                    first_time = (label in hits
+                                  and not theatre_seen(movie["id"], label))
                     if first_time:
-                        names = [v["name"] for v in hits[w]]
-                    elif theatre_seen(movie["id"], w):
-                        names = theatre_venue_names(movie["id"], w)
+                        names = [v["name"] for v in hits[label]]
+                    elif theatre_seen(movie["id"], label):
+                        names = theatre_venue_names(movie["id"], label)
                     else:
                         continue  # not live yet
-                    print(f"   theatre alert: {w} "
+                    # The screen is what makes this alert distinct from the
+                    # same venue's other screens, so it belongs in the name.
+                    if item["screen"]:
+                        names = [f"{n} - {item['screen']}" for n in names]
+                    print(f"   theatre alert: {label} "
                           f"({'new' if first_time else 'repeat'})")
-                    if send_theatre_alert(movie, w, names, first_time):
+                    if send_theatre_alert(
+                            movie, label, names, first_time,
+                            "screen" if item["screen"] else "theatre"):
                         if first_time:
-                            record_theatre(movie["id"], w, hits[w])
+                            record_theatre(movie["id"], label, hits[label])
                     else:
                         failures.append(
-                            f"{movie['name']} / {w} (alert not delivered)"
+                            f"{movie['name']} / {label} (alert not delivered)"
                         )
         finally:
             browser.close()

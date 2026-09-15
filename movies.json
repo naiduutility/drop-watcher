@@ -8,11 +8,42 @@
     "show_date": "2026-09-25",
     "language": "english",
     "theatres": [
-      "AMB",
-      "Prasads",
-      "Allu Cinemas Kokapet",
-      "AAA Cinemas",
-      "PVR Inorbit"
+      {
+        "venue": "ACAS",
+        "screens": [
+          "LED Screen"
+        ]
+      },
+      {
+        "venue": "AMBH",
+        "screens": [
+          "HDR By Barco"
+        ]
+      },
+      {
+        "venue": "ALUC",
+        "screens": [
+          "Dolby Cinema"
+        ]
+      },
+      {
+        "venue": "PIIC",
+        "screens": [
+          "PXL"
+        ]
+      },
+      {
+        "venue": "ILKS",
+        "screens": [
+          "PXL"
+        ]
+      },
+      {
+        "venue": "PRHN",
+        "screens": [
+          "PCX"
+        ]
+      }
     ],
     "enabled": true
   }

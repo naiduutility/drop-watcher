@@ -18,7 +18,12 @@ Targets live in [`movies.json`](movies.json) — one object per movie:
     "name": "Avengers: Endgame Encore",
     "city": "Hyderabad",
     "url": "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/ET00514163",
-    "theatres": ["AMB", "Prasads", "Allu Cinemas Kokapet", "AAA Cinemas"],
+    "theatres": [
+      "AMB",
+      "Prasads",
+      {"venue": "Allu Cinemas Kokapet", "screens": ["IMAX"]},
+      {"venue": "AAA Cinemas", "screens": ["Dolby Atmos", "4DX"]}
+    ],
     "enabled": true
   }
 ]
@@ -30,7 +35,8 @@ Targets live in [`movies.json`](movies.json) — one object per movie:
 | `id`        | Stable key for acknowledgements. Defaults to the `ET…` code parsed from the URL. |
 | `name`      | Shown in the notification title. Defaults to the `ET…` code.   |
 | `city`      | Shown in the notification title. Defaults to `Hyderabad`.       |
-| `theatres`  | Preferred theatres to watch for. Empty/omitted = don't check theatres at all. |
+| `theatres`  | Preferred theatres to watch for — a venue string, or `{"venue": ..., "screens": [...]}` to watch particular screens there. Empty/omitted = don't check theatres at all. |
+| `screens`   | Optional. Screens to watch at every plain-string theatre, for when you want one format everywhere. Per-theatre `screens` override it. |
 | `language`  | Optional. Narrows the showtimes lookup for a multi-language release (e.g. `"telugu"`). Omitted = whatever language BMS serves. |
 | `enabled`   | Set `false` to park a movie without deleting it. Defaults to `true`. |
 
@@ -88,10 +94,11 @@ Each alert carries two action buttons:
 
 ---
 
-## Preferred theatres
+## Preferred theatres and screens
 
 List theatres per movie and each alert tells you which of them already have
-shows:
+shows — and, when you asked for a particular screen, whether *that screen* is
+running yet:
 
 ```
 Avengers: Endgame Encore tickets are LIVE in Hyderabad!
@@ -100,9 +107,18 @@ Booking just opened on BookMyShow. Tap to book now:
 https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/ET00514163
 
 Your theatres with shows (1):
-  - PVR: Nexus Mall Kukatpally, Hyderabad
-Still waiting on: AMB, INMH
+  - AAA Cinemas: Ameerpet - Dolby Atmos
+
+Still waiting on:
+  - AMB (IMAX): listed, running English • 2D | LED SCREEN DOLBY ATMOS
+  - Prasads (PCX): not listed yet
 ```
+
+Those last two lines are the point of the screen filter. *Listed, running …*
+means the theatre is onboarded but not on the screen you want; *not listed
+yet* means the theatre itself hasn't appeared. Without it, a theatre going
+live reads as "done" even when the only screen you'd actually book is still
+missing.
 
 An entry matches a venue by **exact venue code**, or when **every word in the
 entry appears as a whole word in the venue name** (order and punctuation
@@ -110,6 +126,42 @@ ignored). So `"PVFS"`, `"pvr nexus"` and `"PVR: Nexus"` all find
 *PVR: Nexus Mall Kukatpally, Hyderabad*. Codes are the trailing segment of a
 venue's BMS URL (`/cinemas/hyderabad/pvr-nexus-mall-kukatpally-hyderabad/PVFS`)
 — use them when a name is ambiguous.
+
+### Watching a specific screen
+
+A theatre entry may be an object naming the screens that matter there:
+
+```json
+"theatres": [
+  "Prasads",
+  {"venue": "AMB", "screens": ["IMAX", "4DX"]},
+  {"venue": "AAA Cinemas", "screens": ["Dolby Atmos"]}
+]
+```
+
+To want one format across every theatre, set `screens` at the movie level
+instead — it applies to each plain-string entry, and a theatre's own `screens`
+overrides it:
+
+```json
+"theatres": ["AMB", "Prasads", "AAA Cinemas"],
+"screens": ["IMAX"]
+```
+
+Screens are matched by the **same word rule as venues**, against the format
+BMS records per showtime (`English • 2D | LED SCREEN DOLBY ATMOS`). So
+`"IMAX"` matches an IMAX 2D and an IMAX 3D show, `"dolby atmos"` matches
+*LED SCREEN DOLBY ATMOS*, `"IMAX 3D"` narrows to the 3D one, and `"PCX"`
+matches nothing but PCX.
+
+**Each venue+screen pair is watched separately.** `AMB (IMAX)` and
+`AMB (4DX)` each get their own first-seen alert and their own state marker, so
+AMB opening 4DX never marks its IMAX as done.
+
+> A screen whose format BMS cannot tell us is reported as
+> `screens unreadable`, never as absent. "We couldn't read the screens" and
+> "that screen isn't running" must not look alike — conflating them is exactly
+> how a watch goes quiet forever.
 
 Word matching rather than substring matching is deliberate, for two reasons.
 BMS writes venues as `Name: Location`, so the natural phrasing
@@ -121,8 +173,10 @@ from matching *Ambica Theatre*.
 
 [`venues-hyderabad.md`](venues-hyderabad.md) lists every Hyderabad venue with
 its code — 72 of them — so adding a theatre is copy-paste rather than
-guesswork. Regenerate it any time (the list is the *city's*, so any
-currently-bookable movie works):
+guesswork. It also lists the **screens** each venue is running, which is how
+you get a screen string exactly right. Regenerate it any time (venue names and
+codes are the *city's*, so any currently-bookable movie works — but the screen
+column is only ever that movie's):
 
 ```powershell
 python check.py --venues "https://in.bookmyshow.com/movies/hyderabad/<some-now-showing-movie>/ET00000000"
@@ -132,18 +186,19 @@ Add `--language telugu` to narrow a multi-language release, or
 `--date 20260925` for another day. It writes `venues-<city>.md`, so the same
 command builds a reference for any city.
 
-> **Screen formats are not venues.** Prasads' *PCX*, IMAX, 4DX and similar are
-> formats offered *inside* a venue and never appear in its name, so
-> `"prasads pcx"` matches nothing — use `"Prasads"`. There is currently no way
-> to filter down to a specific screen format.
+> **Screen formats are not part of the venue name.** Prasads' *PCX*, IMAX,
+> 4DX and similar are formats offered *inside* a venue, so `"prasads pcx"` as
+> a theatre entry matches nothing. Put the venue and the screen in their own
+> fields instead: `{"venue": "Prasads", "screens": ["PCX"]}`.
 
 **Theatres never gate the alert.** Booking-open always pushes immediately, even
 if none of your theatres are listed yet — theatres get onboarded
 progressively, and waiting for yours could cost you the opening rush. Instead,
 the first time one of your theatres appears, that run's repeat alert is
-*replaced* by a theatre-specific push (`AMB Cinemas: Gachibowli now has
-shows!`), so extra signal never costs an extra notification. Once every
-theatre you listed has been seen, the venue check stops running.
+*replaced* by a theatre-specific push (`AMB Cinemas: Gachibowli - IMAX now
+has shows!`), so extra signal never costs an extra notification. Once every
+theatre **and screen** you listed has been seen, the venue check stops
+running.
 
 ### How the venue list is read
 
