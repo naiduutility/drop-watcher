@@ -18,6 +18,9 @@ Targets live in [`movies.json`](movies.json) — one object per movie:
     "name": "Avengers: Endgame Encore",
     "city": "Hyderabad",
     "url": "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/ET00514163",
+    "book_code": "ET00516728",
+    "show_date": "2026-09-25",
+    "language": "english",
     "theatres": [
       "AMB",
       "Prasads",
@@ -38,11 +41,42 @@ Targets live in [`movies.json`](movies.json) — one object per movie:
 | `theatres`  | Preferred theatres to watch for — a venue string, or `{"venue": ..., "screens": [...]}` to watch particular screens there. Empty/omitted = don't check theatres at all. |
 | `screens`   | Optional. Screens to watch at every plain-string theatre, for when you want one format everywhere. Per-theatre `screens` override it. |
 | `language`  | Optional. Narrows the showtimes lookup for a multi-language release (e.g. `"telugu"`). Omitted = whatever language BMS serves. |
+| `book_code` | Optional. The **booking** event code, when it differs from the movie page's — see below. Omitted = the code in `url`. |
+| `show_date` | Optional `YYYY-MM-DD`. The earliest date to read showtimes for, when booking opens ahead of release. A **floor**, not a fixed date: once it passes, the check rolls forward to today. |
+| `showtimes_url` | Optional. A complete showtimes URL, used verbatim, when none of the above gets you the right page. Pins the date, so it needs editing once that date passes. |
 | `enabled`   | Set `false` to park a movie without deleting it. Defaults to `true`. |
 
 **To add a movie:** copy the URL from BookMyShow, append a block, commit. All
 movies are checked in a **single** Actions run that reuses one browser, so each
 extra movie costs ~20s — not a whole new job.
+
+### When the movie page's code is not the booking code
+
+Usually the `ET…` code in the movie URL is also the one the showtimes path
+uses, and nothing needs setting. But a **re-release or a per-language event
+gets its own booking code**, and the two then differ:
+
+```
+page :  /movies/hyderabad/avengers-endgame-encore/ET00514163
+shows:  /movies/hyderabad/avengers-endgame-encore/buytickets/ET00516728/20260925
+```
+
+Getting this wrong is the nastiest failure this watcher has, because it does
+not look like a failure: BMS serves **HTTP 200 with zero venue records**, so
+the theatre check reports "no venues" forever while booking is wide open. Set
+`book_code` to the code in the *buytickets* URL — open the movie on BMS, click
+through to showtimes, and read it out of the address bar.
+
+`show_date` has the same shape of failure behind it. A movie whose booking has
+opened for a future release has **no shows today**, so a lookup for today
+returns an empty page. Set it to the release date and the check asks for the
+right day until that day arrives, then follows today on its own.
+
+> The run log tells these apart. A zero-venue payload is reported as either
+> *"no shows listed for this date/language"* (wrong code, wrong date, or
+> genuinely nothing on) or *"payload shape changed, VENUE_RE is stale"* (the
+> venue list is there but the parser no longer recognises it) — counted from
+> the raw `venueCode` keys rather than guessed.
 
 ---
 
@@ -77,20 +111,32 @@ the watcher indefinitely.
 
 ## Alerts and acknowledgement
 
-Per movie:
+**An ack silences one alert, not one movie.** A movie's booking-open alert and
+each watched theatre or screen are separate notifications with separate acks,
+because they answer different questions: "tickets exist" is not "the screen I
+would actually book is open". Acking the first used to silence the second,
+which is precisely the alert you were waiting for.
 
-| State                        | Behaviour                              |
-|------------------------------|----------------------------------------|
-| Not open yet                 | silent                                 |
-| Open, not acknowledged       | alerts on **every run** (~5 min)       |
-| Open, acknowledged           | silent forever; movie is skipped entirely |
+| Alert                              | Behaviour                                   |
+|------------------------------------|---------------------------------------------|
+| Not open yet                       | silent                                      |
+| Booking open, un-acked             | alerts on **every run** (~5 min)            |
+| A watched screen goes live, un-acked | its own alert, repeating every run        |
+| Acked                              | that alert alone stops; the rest keep going |
+| *Booked - stop all* tapped         | the whole movie goes quiet, permanently     |
 
-Each alert carries two action buttons:
+Each alert carries three buttons — ntfy's hard maximum, and a fourth would be
+rejected outright, taking the whole notification with it:
 
 - **Book now** — opens the BMS page.
-- **Got it - stop alerts** — your acknowledgement. Tapping it stops the alerts
-  for *that movie only*; the others keep being watched. It also stops theatre
-  follow-ups for that movie, since it means "I'm done with this one".
+- **Got it - …** — the narrow ack. On the booking-open alert it reads *open
+  alert*; on a theatre or screen alert it silences that one item only, leaving
+  the same venue's other screens alone.
+- **Booked - stop all** — "I have booked, I am done with this film". The only
+  way to silence a screen you have not been told about yet.
+
+A movie is skipped entirely only once every one of its alerts is acked, or
+*stop all* has been tapped.
 
 ---
 
@@ -193,12 +239,19 @@ command builds a reference for any city.
 
 **Theatres never gate the alert.** Booking-open always pushes immediately, even
 if none of your theatres are listed yet — theatres get onboarded
-progressively, and waiting for yours could cost you the opening rush. Instead,
-the first time one of your theatres appears, that run's repeat alert is
-*replaced* by a theatre-specific push (`AMB Cinemas: Gachibowli - IMAX now
-has shows!`), so extra signal never costs an extra notification. Once every
-theatre **and screen** you listed has been seen, the venue check stops
-running.
+progressively, and waiting for yours could cost you the opening rush. Each
+watched theatre or screen then gets **its own** push the first time it appears
+(`AMB Cinemas: Gachibowli - HDR By Barco now has shows!`), repeating until you
+ack that one.
+
+So a run can legitimately send several notifications: one per thing you asked
+about that is live and un-acked. That is the deliberate trade for being able
+to ack them separately — the alternative was one combined alert whose single
+ack silenced screens you had not heard about yet.
+
+Once a theatre or screen has been seen live, its repeat alert is served from
+the stored marker, so the showtimes page is only reloaded while something you
+asked about has **never** been seen.
 
 ### How the venue list is read
 
@@ -221,10 +274,13 @@ screen format rather than the one BMS would auto-select:
 
 ### Two caveats worth knowing
 
-1. **It covers one date — today — and one language.** `etCodes=*` gets all
-   screen formats, but for a multi-language release BMS serves one language
-   unless you set `language`. So a theatre's absence is not hard proof it
-   isn't showing the movie; treat the list as a positive signal.
+1. **It covers one date and one language.** The date is today, or
+   `show_date` while that is still ahead. `etCodes=*` gets all screen
+   formats, but for a multi-language release BMS serves one language unless
+   you set `language` — and the screen strings carry that language, so a
+   venue can look screen-less simply because you are reading the wrong
+   slice. A theatre's absence is not hard proof it isn't showing the movie;
+   treat the list as a positive signal.
 2. **It costs a second page load.** Only while booking is open and some of
    your theatres are still missing, with a `SHOWTIMES_DELAY_MS` (default 6s)
    pause first — loading the movie page and showtimes page back-to-back earned
@@ -297,8 +353,9 @@ If the payload ever lacks `available` (store moves off Shopify, URL changes),
 the run **fails loudly** rather than reporting "out of stock" — a silent false
 negative would mean never being told.
 
-Stock alerts follow the same lifecycle as movies: repeat every run while in
-stock, with a **Buy now** button and the same **Got it - stop alerts** ack.
+Stock alerts repeat every run while in stock, with a **Buy now** button and a
+**Got it - stop alerts** ack. A product is one thing rather than a movie's
+several, so its ack is the whole story — there is no per-theatre split here.
 
 ---
 
@@ -429,8 +486,9 @@ The detection logic is identical everywhere — only *where* it runs changes.
 - **GitHub disables scheduled workflows after 60 days of repo inactivity** and
   only runs schedules on the **default branch**. A commit every couple of
   months keeps it alive.
-- **To stop alerts for one movie**: tap **Got it - stop alerts** on the
-  notification, or set `"enabled": false` in `movies.json`.
+- **To stop one alert**: tap its **Got it - …** button — that theatre or
+  screen only. **To stop a whole movie**: tap **Booked - stop all** on any of
+  its alerts, or set `"enabled": false` in `movies.json`.
 - **To stop everything**: Actions tab → disable **both** *Movie Ticket
   Watcher* and *Product Stock Watcher*.
 - The `.state` cache is keyed per run and restored via the `bms-alert-state-`
