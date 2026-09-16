@@ -5,7 +5,10 @@
     "city": "Hyderabad",
     "url": "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/ET00514163",
     "book_code": "ET00516728",
-    "show_date": "2026-09-25",
+    "show_dates": [
+      "2026-09-25",
+      "2026-09-26"
+    ],
     "language": "english",
     "theatres": [
       {

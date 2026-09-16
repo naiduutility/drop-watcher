@@ -20,6 +20,11 @@ Alert lifecycle per movie:
     open, un-acked  -> alert on EVERY run (so you can't miss it)
     open, acked     -> silent forever; the movie is skipped entirely
 
+A movie may pin the date(s) it should be watched on ("show_date" for one,
+"show_dates" for several — useful when any of a few days would do). Each date
+is checked, alerted and acknowledged separately: the screen you want on the
+26th is different news from the same screen on the 27th.
+
 A movie may also list preferred "theatres". Those never gate the alert — the
 booking-open push always fires first, annotated with which of your theatres
 already have shows — but the first time one of them appears, that run's repeat
@@ -87,6 +92,10 @@ BMS_RETRY_DELAY_MS = int(os.environ.get("BMS_RETRY_DELAY_MS", "15000"))
 SHOWTIMES_DELAY_MS = int(os.environ.get("SHOWTIMES_DELAY_MS", "6000"))
 # Runners are UTC; product "watch_from" dates are meant in local Indian time.
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+# Budget for the open alert's per-date theatre section. ntfy's hard limit is
+# 4096 bytes for the WHOLE message and it rejects anything longer outright, so
+# a movie watched across many dates trims its tail rather than losing the push.
+MAX_THEATRE_LINES = 2500
 
 # Ad-hoc single-target override (handy for local testing — see README).
 BMS_URL = os.environ.get("BMS_URL", "")
@@ -149,6 +158,7 @@ def load_targets():
                 "language": os.environ.get("LANGUAGE", ""),
                 "book_code": "",
                 "show_date": "",
+                "show_dates": [],
                 "showtimes_url": "",
             }
         ]
@@ -176,7 +186,11 @@ def load_targets():
                 # own. "id" stays the ack key; "book_code" is only for
                 # building the buytickets URL.
                 "book_code": entry.get("book_code", ""),
+                # One date or many: "show_date" is the single-date spelling,
+                # "show_dates" the list. Both are read, so an existing config
+                # keeps working and a second date is one line to add.
                 "show_date": entry.get("show_date", ""),
+                "show_dates": entry.get("show_dates") or [],
                 "showtimes_url": entry.get("showtimes_url", ""),
             }
         )
@@ -314,12 +328,9 @@ def showtimes_url(movie, when=None):
     for every screen format rather than the one BMS would auto-select; an
     optional per-movie "language" narrows a multi-language release.
     """
-    # today_ist(), not date.today(): the runner is UTC, so between 00:00 and
-    # 05:30 IST a bare today() is still on YESTERDAY's date and BMS returns a
-    # showtimes payload with zero venues — which this code then reports as
-    # "no venues found", indistinguishable from a payload-shape change.
     # Full override wins: paste the URL BMS itself gave you and nothing is
-    # guessed. It pins the date, so it needs editing once that date passes.
+    # guessed. It pins the date, so it needs editing once that date passes —
+    # and it is a SINGLE url, so a multi-date movie cannot use it.
     if movie.get("showtimes_url"):
         return movie["showtimes_url"]
 
@@ -345,33 +356,78 @@ def showtimes_url(movie, when=None):
     return url
 
 
+def showtime_dates(movie):
+    """The dates this movie's showtimes are read for, earliest first.
+
+    A movie whose booking has opened for a FUTURE release has no shows today,
+    so set "show_date" (one date) or "show_dates" (several) — otherwise every
+    run reads an empty page and reports no venues.
+
+    Dates already past are DROPPED, not rolled forward: their showtimes page
+    is empty, which is the same silent zero-venue failure the field exists to
+    avoid. An empty result therefore means "nothing pinned any more", and the
+    caller falls back to today — exactly what the single-date version did by
+    taking max(show_date, today).
+    """
+    raws = list(movie.get("show_dates") or [])
+    single = (movie.get("show_date") or "").strip()
+    if single:
+        raws.append(single)
+
+    today, out = today_ist(), []
+    for raw in raws:
+        raw = str(raw).strip()
+        if not raw:
+            continue
+        try:
+            day = datetime.datetime.strptime(raw, "%Y-%m-%d").date()
+        except ValueError:
+            # Fail open: skip the bad entry rather than the whole check.
+            print(f"!! bad show date {raw!r} for {movie.get('name')} - "
+                  "ignoring", file=sys.stderr)
+            continue
+        if day < today:
+            print(f"-- show date {raw} has passed for {movie.get('name')} "
+                  "- ignoring")
+            continue
+        if day not in out:
+            out.append(day)
+    return sorted(out)
+
+
 def showtime_date(movie, when=None):
-    """Which date's showtimes to read.
+    """The single date a bare showtimes lookup should use.
 
-    Defaults to today (IST), which is right for a film already running. A
-    movie whose booking has opened for a FUTURE release date has no shows
-    today, so set "show_date" to that date — otherwise every run reads an
-    empty page and reports no venues.
-
-    "show_date" is a FLOOR, not a fixed date: once it has passed, the check
-    rolls forward to today on its own. A hard date would keep asking for a
-    day in the past, whose showtimes page is empty — the same silent
-    zero-venue failure the field exists to avoid.
+    The earliest watched date, or today (IST) when none is pinned. today_ist()
+    rather than date.today() because the runner is UTC: between 00:00 and
+    05:30 IST a bare today() is still on YESTERDAY, whose showtimes payload has
+    zero venues.
     """
     if when:
         return when
-    raw = (movie.get("show_date") or "").strip()
-    if raw:
-        try:
-            return max(
-                datetime.datetime.strptime(raw, "%Y-%m-%d").date(),
-                today_ist(),
-            )
-        except ValueError:
-            # Fail open to today rather than skipping the check entirely.
-            print(f"!! bad show_date {raw!r} for {movie.get('name')} - "
-                  "using today", file=sys.stderr)
-    return today_ist()
+    dates = showtime_dates(movie)
+    return dates[0] if dates else today_ist()
+
+
+def watch_days(movie):
+    """Every date to check this movie on, as a list for the per-date loops.
+
+    `None` — the single-element fallback — means "whatever is on today, and
+    don't stamp a date onto the ack keys". That distinction matters: a film
+    already running is watched on a rolling today, and stamping the ack keys
+    with it would un-silence every theatre you acked at midnight.
+    """
+    return showtime_dates(movie) or [None]
+
+
+def day_stamp(day):
+    """Ack/marker suffix for one watched date; "" for the undated fallback."""
+    return f"@{day:%Y%m%d}" if day else ""
+
+
+def day_label(day):
+    """How a watched date reads in a notification, e.g. "Sat 26 Sep"."""
+    return day.strftime("%a %d %b") if day else ""
 
 
 # Venue records inside the showtimes page's embedded state, e.g.
@@ -654,16 +710,24 @@ def _slug(text):
     return re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-").lower()[:40] or "x"
 
 
-def theatre_ack_id(movie_id, wanted):
-    """Ack key for ONE watch item of one movie.
+def theatre_ack_id(movie_id, wanted, day=None):
+    """Ack key for ONE watch item of one movie on ONE date.
 
     `wanted` is a watchlist label, so a screen gets its own key:
     "ET00514163@ambh-hdr-by-barco" is AMB's Screen 1, distinct from the same
     venue's other screens. Namespaced under the movie so "Got it" on one
     alert silences that one alone, and the booking-open ack no longer
     silences theatres.
+
+    A watched date is stamped on top of that
+    ("...@ambh-hdr-by-barco@20260926"), because the same screen on the 26th
+    and on the 27th are two different pieces of news: acking "yes, the 27th is
+    open" must not silence the date you actually want to watch on. `day` is
+    None for a movie with no date pinned, which keeps the old undated keys —
+    a rolling today would otherwise change the key every midnight and
+    resurrect every ack.
     """
-    return f"{movie_id}@{_slug(wanted)}"
+    return f"{movie_id}@{_slug(wanted)}{day_stamp(day)}"
 
 
 def all_ack_id(movie_id):
@@ -692,23 +756,25 @@ def pending_alerts(movie):
     if is_silenced(movie["id"]):
         return []
     jobs = ["open"] if not is_acked(movie["id"]) else []
-    jobs += [
-        i["label"] for i in watchlist(movie)
-        if not is_acked(theatre_ack_id(movie["id"], i["label"]))
-    ]
+    for day in watch_days(movie):
+        jobs += [
+            f"{i['label']}{day_stamp(day)}" for i in watchlist(movie)
+            if not is_acked(theatre_ack_id(movie["id"], i["label"], day))
+        ]
     return jobs
 
 
-def theatre_marker(movie_id, wanted):
-    return os.path.join(STATE_DIR, f"venue-{movie_id}-{_slug(wanted)}")
+def theatre_marker(movie_id, wanted, day=None):
+    stamp = day_stamp(day).replace("@", "-")
+    return os.path.join(STATE_DIR, f"venue-{movie_id}-{_slug(wanted)}{stamp}")
 
 
-def theatre_seen(movie_id, wanted):
+def theatre_seen(movie_id, wanted, day=None):
     """True once this theatre has been reported live at least once."""
-    return os.path.exists(theatre_marker(movie_id, wanted))
+    return os.path.exists(theatre_marker(movie_id, wanted, day))
 
 
-def record_theatre(movie_id, wanted, venues=()):
+def record_theatre(movie_id, wanted, venues=(), day=None):
     """Remember that this theatre went live, and under which venue name(s).
 
     The names are stored because a theatre alert now repeats until it is
@@ -716,12 +782,12 @@ def record_theatre(movie_id, wanted, venues=()):
     this marker instead of reloading the showtimes page.
     """
     names = [v["name"] for v in venues] or [wanted]
-    _touch(theatre_marker(movie_id, wanted), "\n".join(names))
+    _touch(theatre_marker(movie_id, wanted, day), "\n".join(names))
 
 
-def theatre_venue_names(movie_id, wanted):
+def theatre_venue_names(movie_id, wanted, day=None):
     try:
-        with open(theatre_marker(movie_id, wanted), encoding="utf-8") as f:
+        with open(theatre_marker(movie_id, wanted, day), encoding="utf-8") as f:
             names = [ln.strip() for ln in f if ln.strip()]
     except OSError:
         return [wanted]
@@ -763,20 +829,18 @@ def fetch_acks():
 
 
 # --- Notification -----------------------------------------------------------
-def theatre_lines(movie, hits, venues, status="ok"):
-    """The 'which of your theatres and screens are live' alert section.
+def day_lines(items, report, pad=""):
+    """The theatre section for ONE watched date.
 
-    `status` distinguishes the reasons we may have no venue data, so a skipped
-    check never masquerades as a failed one.
+    `report["status"]` distinguishes the reasons we may have no venue data for
+    that date, so a skipped check never masquerades as a failed one.
     """
-    items = watchlist(movie)
-    if not items:
-        return ""
-    if status == "all-live":
+    venues, hits = report.get("venues"), report.get("hits") or {}
+    if report.get("status") == "all-live":
         live = ", ".join(i["label"] for i in items)
-        return f"\n\nAll your theatres already have shows: {live}"
+        return f"{pad}All your theatres already have shows: {live}"
     if venues is None:
-        return "\n\n(Could not read the theatre list this run.)"
+        return f"{pad}(Could not read the theatre list this run.)"
 
     live, waiting, seen = [], [], set()
     for item in items:
@@ -789,25 +853,58 @@ def theatre_lines(movie, hits, venues, status="ok"):
             continue
         running = screens_at(venues, item)
         if running is None:
-            waiting.append(f"  - {item['label']}: not listed yet")
+            waiting.append(f"{pad}  - {item['label']}: not listed yet")
         elif not running:
             # Listed, but its screens could not be read - say so rather than
             # implying the screen you want is definitely absent.
-            waiting.append(f"  - {item['label']}: listed, screens unreadable")
+            waiting.append(f"{pad}  - {item['label']}: listed, screens unreadable")
         else:
             # The useful case: the theatre is live, just not on your screen.
-            waiting.append(f"  - {item['label']}: listed, running "
+            waiting.append(f"{pad}  - {item['label']}: listed, running "
                            + ", ".join(running))
 
     if live:
-        body = (f"\n\nYour theatres with shows ({len(live)}):\n"
-                + "\n".join(f"  - {x}" for x in live))
+        body = (f"{pad}Your theatres with shows ({len(live)}):\n"
+                + "\n".join(f"{pad}  - {x}" for x in live))
     else:
-        body = (f"\n\nNone of your theatres yet ({len(venues)} other venue(s) "
+        body = (f"{pad}None of your theatres yet ({len(venues)} other venue(s) "
                 "listed). Theatres are onboarded progressively, so yours may "
                 "appear later.")
     if waiting:
-        body += "\n\nStill waiting on:\n" + "\n".join(waiting)
+        body += f"\n\n{pad}Still waiting on:\n" + "\n".join(waiting)
+    return body
+
+
+def theatre_lines(movie, reports):
+    """The 'which of your theatres and screens are live' alert section.
+
+    `reports` is one {day, venues, hits, status} per watched date. A movie
+    watched across several dates gets one block per date, each headed by the
+    date — "AMB has shows" is only useful once you know for WHICH day.
+    """
+    items = watchlist(movie)
+    if not items:
+        return ""
+    if not reports:
+        return "\n\n(Could not read the theatre list this run.)"
+    if len(reports) == 1 and not reports[0].get("day"):
+        # Undated single-date movie: the original, heading-less wording.
+        return "\n\n" + day_lines(items, reports[0])
+
+    # ntfy caps a message at 4096 bytes and rejects — not truncates — anything
+    # longer, which would cost the whole notification. Many dates x many
+    # screens can get there, so drop the tail rather than the alert.
+    body, dropped = "", 0
+    for r in reports:
+        block = (f"\n\n{day_label(r['day']) or 'Today'}:\n"
+                 + day_lines(items, r, pad="  "))
+        if len(body) + len(block) > MAX_THEATRE_LINES:
+            dropped += 1
+            continue
+        body += block
+    if dropped:
+        body += (f"\n\n(+{dropped} more date(s) watched - each still gets its "
+                 "own alert when a screen goes live.)")
     return body
 
 
@@ -897,7 +994,7 @@ def _actions_for(movie, label="Book now", ack_id=None,
     return actions
 
 
-def send_alert(movie, hits=None, venues=None, status="ok"):
+def send_alert(movie, reports=None):
     """Push a booking-open alert. Returns True if ntfy accepted it."""
     if not NTFY_TOPIC:
         print("!! NTFY_TOPIC not set - cannot send notification", file=sys.stderr)
@@ -912,7 +1009,7 @@ def send_alert(movie, hits=None, venues=None, status="ok"):
             "message": (
                 "Booking just opened on BookMyShow. Tap to book now:\n"
                 f"{movie['url']}"
-                + theatre_lines(movie, hits or {}, venues, status)
+                + theatre_lines(movie, reports or [])
             ),
             "priority": 5,
             "tags": ["rotating_light"],
@@ -925,12 +1022,14 @@ def send_alert(movie, hits=None, venues=None, status="ok"):
     )
 
 
-def send_theatre_alert(movie, wanted, names, first_time, what="theatre"):
-    """Push an alert about ONE watched theatre or screen.
+def send_theatre_alert(movie, wanted, names, first_time, what="theatre",
+                       day=None):
+    """Push an alert about ONE watched theatre or screen on ONE date.
 
-    One notification per watch item, each carrying its own ack id, so "Got it"
-    here silences this item and nothing else — not the movie, not the other
-    theatres, and not the same venue's other screens. Like the booking-open
+    One notification per watch item per date, each carrying its own ack id, so
+    "Got it" here silences this item on this date and nothing else — not the
+    movie, not the other theatres, not the same venue's other screens, and not
+    the same screen on another day you are watching. Like the booking-open
     alert it therefore repeats every run until it is acked; `first_time` only
     changes the wording.
     """
@@ -939,9 +1038,12 @@ def send_theatre_alert(movie, wanted, names, first_time, what="theatre"):
         return False
 
     shown = ", ".join(names) or wanted
+    # The date is what makes this alert distinct from the same screen on
+    # another watched day, so it goes in the title, not buried in the body.
+    when = f" on {day_label(day)}" if day else ""
     title = (
-        f"{movie['name']}: {shown} now has shows!" if first_time
-        else f"{movie['name']}: still showing at {shown}"
+        f"{movie['name']}: {shown} now has shows{when}!" if first_time
+        else f"{movie['name']}: still showing at {shown}{when}"
     )
     lead = (
         f"A {what} you asked about just came online"
@@ -952,15 +1054,15 @@ def send_theatre_alert(movie, wanted, names, first_time, what="theatre"):
             "topic": NTFY_TOPIC,
             "title": title,
             "message": (
-                f"{lead} in {movie['city']}.\n{movie['url']}"
-                f"\n\n\"Got it\" stops this {what} only; "
+                f"{lead} in {movie['city']}{when}.\n{movie['url']}"
+                f"\n\n\"Got it\" stops this {what}{when} only; "
                 "\"Booked - stop all\" stops the whole movie."
             ),
             "priority": 5,
             "tags": ["performing_arts"],
             "click": movie["url"],
             "actions": _actions_for(
-                movie, "Book now", theatre_ack_id(movie["id"], wanted),
+                movie, "Book now", theatre_ack_id(movie["id"], wanted, day),
                 ack_label="Got it - this theatre", all_button=True,
             ),
         }
@@ -1307,17 +1409,29 @@ def main():
                     viewport={"width": 1366, "height": 900},
                 )
                 open_pending = not is_acked(movie["id"])
-                # Watch items (venue + screen) still owed an alert.
-                wanted = [
-                    i for i in watchlist(movie)
-                    if not is_acked(theatre_ack_id(movie["id"], i["label"]))
-                ]
+                days = watch_days(movie)
+                if len(days) > 1:
+                    print("   watching dates  : "
+                          + ", ".join(str(d) for d in days))
+                # Watch items (venue + screen) still owed an alert, per date —
+                # each date is its own question, with its own ack.
+                wanted = {
+                    day: [
+                        i for i in watchlist(movie)
+                        if not is_acked(
+                            theatre_ack_id(movie["id"], i["label"], day))
+                    ]
+                    for day in days
+                }
                 # Only items never yet seen live need the showtimes page —
                 # a known-live one re-alerts from its marker, for free.
-                outstanding = [
-                    i for i in wanted
-                    if not theatre_seen(movie["id"], i["label"])
-                ]
+                outstanding = {
+                    day: [
+                        i for i in items
+                        if not theatre_seen(movie["id"], i["label"], day)
+                    ]
+                    for day, items in wanted.items()
+                }
 
                 # The context must outlive the whole per-movie body, because
                 # the theatre check opens a second page in it.
@@ -1349,30 +1463,53 @@ def main():
 
                     print(f">>> BOOKING OPEN for {movie['name']}")
 
-                    # Only load the showtimes page while some theatre is still
-                    # unaccounted for — every extra load is extra anti-bot
-                    # exposure.
-                    venues, hits, status = None, {}, "ok"
-                    if not outstanding:
-                        status = "all-live"
-                        if movie["theatres"]:
-                            print("   nothing left to look up - skipping "
-                                  "theatre check")
-                    else:
+                    # One showtimes page per watched date, and only while some
+                    # theatre on that date is still unaccounted for — every
+                    # extra load is extra anti-bot exposure, so a date with
+                    # nothing left to learn is never fetched.
+                    reports = {}
+                    for day in days:
+                        report = {"day": day, "venues": None, "hits": {},
+                                  "status": "ok"}
+                        reports[day] = report
+                        head = f"[{day}] " if day else ""
+                        if not outstanding[day]:
+                            report["status"] = "all-live"
+                            if movie["theatres"]:
+                                print(f"   {head}nothing left to look up - "
+                                      "skipping theatre check")
+                            continue
                         try:
-                            venues = scrape_venues(context, movie)
-                            hits = match_watchlist(venues, outstanding)
-                            print(f"   venues listed   : {len(venues)}")
-                            print(f"   yours with shows: {sorted(hits)}")
-                            for i in outstanding:
+                            venues = scrape_venues(context, movie, day)
+                            hits = match_watchlist(venues, outstanding[day])
+                            # Items already known live on this date are not
+                            # looked up again (they re-alert from their
+                            # marker), so fill them in from it — otherwise the
+                            # open alert's repeat would report a screen it
+                            # already told you was live as "not listed yet".
+                            for i in watchlist(movie):
+                                if i["label"] in hits:
+                                    continue
+                                if not theatre_seen(movie["id"], i["label"], day):
+                                    continue
+                                hits[i["label"]] = [
+                                    {"name": n, "code": "", "screens": None}
+                                    for n in theatre_venue_names(
+                                        movie["id"], i["label"], day)
+                                ]
+                            report["venues"], report["hits"] = venues, hits
+                            print(f"   {head}venues listed   : {len(venues)}")
+                            print(f"   {head}yours with shows: {sorted(hits)}")
+                            for i in outstanding[day]:
                                 if i["label"] not in hits:
-                                    print(f"   still waiting   : {i['label']} "
+                                    print(f"   {head}still waiting   : "
+                                          f"{i['label']} "
                                           f"(running {screens_at(venues, i)})")
                         except Exception as e:
                             # A theatre-list failure must never suppress the
-                            # booking-open alert itself.
-                            print(f"!! venue scrape failed: {e}", file=sys.stderr)
-                            venues = None
+                            # booking-open alert itself, nor the other dates.
+                            print(f"!! {head}venue scrape failed: {e}",
+                                  file=sys.stderr)
                 finally:
                     context.close()
 
@@ -1380,7 +1517,7 @@ def main():
                 # independent notifications with independent acks, so a run
                 # can legitimately send several.
                 if open_pending:
-                    if send_alert(movie, hits, venues, status):
+                    if send_alert(movie, [reports[d] for d in days]):
                         record_alerted(movie["id"])
                     else:
                         # An undelivered alert is a failed run, not a green one.
@@ -1388,31 +1525,37 @@ def main():
                             f"{movie['name']} (open alert not delivered)"
                         )
 
-                for item in wanted:
-                    label = item["label"]
-                    first_time = (label in hits
-                                  and not theatre_seen(movie["id"], label))
-                    if first_time:
-                        names = [v["name"] for v in hits[label]]
-                    elif theatre_seen(movie["id"], label):
-                        names = theatre_venue_names(movie["id"], label)
-                    else:
-                        continue  # not live yet
-                    # The screen is what makes this alert distinct from the
-                    # same venue's other screens, so it belongs in the name.
-                    if item["screen"]:
-                        names = [f"{n} - {item['screen']}" for n in names]
-                    print(f"   theatre alert: {label} "
-                          f"({'new' if first_time else 'repeat'})")
-                    if send_theatre_alert(
-                            movie, label, names, first_time,
-                            "screen" if item["screen"] else "theatre"):
+                for day in days:
+                    hits = reports[day]["hits"]
+                    when = f" [{day}]" if day else ""
+                    for item in wanted[day]:
+                        label = item["label"]
+                        seen = theatre_seen(movie["id"], label, day)
+                        first_time = label in hits and not seen
                         if first_time:
-                            record_theatre(movie["id"], label, hits[label])
-                    else:
-                        failures.append(
-                            f"{movie['name']} / {label} (alert not delivered)"
-                        )
+                            names = [v["name"] for v in hits[label]]
+                        elif seen:
+                            names = theatre_venue_names(movie["id"], label, day)
+                        else:
+                            continue  # not live yet
+                        # The screen is what makes this alert distinct from the
+                        # same venue's other screens, so it belongs in the name.
+                        if item["screen"]:
+                            names = [f"{n} - {item['screen']}" for n in names]
+                        print(f"   theatre alert: {label}{when} "
+                              f"({'new' if first_time else 'repeat'})")
+                        if send_theatre_alert(
+                                movie, label, names, first_time,
+                                "screen" if item["screen"] else "theatre",
+                                day):
+                            if first_time:
+                                record_theatre(movie["id"], label,
+                                               hits[label], day)
+                        else:
+                            failures.append(
+                                f"{movie['name']} / {label}{when} "
+                                "(alert not delivered)"
+                            )
         finally:
             browser.close()
 

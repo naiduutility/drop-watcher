@@ -19,7 +19,7 @@ Targets live in [`movies.json`](movies.json) — one object per movie:
     "city": "Hyderabad",
     "url": "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/ET00514163",
     "book_code": "ET00516728",
-    "show_date": "2026-09-25",
+    "show_dates": ["2026-09-26", "2026-09-27"],
     "language": "english",
     "theatres": [
       "AMB",
@@ -42,8 +42,9 @@ Targets live in [`movies.json`](movies.json) — one object per movie:
 | `screens`   | Optional. Screens to watch at every plain-string theatre, for when you want one format everywhere. Per-theatre `screens` override it. |
 | `language`  | Optional. Narrows the showtimes lookup for a multi-language release (e.g. `"telugu"`). Omitted = whatever language BMS serves. |
 | `book_code` | Optional. The **booking** event code, when it differs from the movie page's — see below. Omitted = the code in `url`. |
-| `show_date` | Optional `YYYY-MM-DD`. The earliest date to read showtimes for, when booking opens ahead of release. A **floor**, not a fixed date: once it passes, the check rolls forward to today. |
-| `showtimes_url` | Optional. A complete showtimes URL, used verbatim, when none of the above gets you the right page. Pins the date, so it needs editing once that date passes. |
+| `show_date` | Optional `YYYY-MM-DD`. The date to read showtimes for, when booking opens ahead of release. |
+| `show_dates` | Optional list of `YYYY-MM-DD`. **Watch several dates at once** — each is checked, alerted and acked on its own. Combines with `show_date`; dates already past are dropped. |
+| `showtimes_url` | Optional. A complete showtimes URL, used verbatim, when none of the above gets you the right page. Pins **one** date, so it needs editing once that date passes and cannot be used with `show_dates`. |
 | `enabled`   | Set `false` to park a movie without deleting it. Defaults to `true`. |
 
 **To add a movie:** copy the URL from BookMyShow, append a block, commit. All
@@ -69,8 +70,42 @@ through to showtimes, and read it out of the address bar.
 
 `show_date` has the same shape of failure behind it. A movie whose booking has
 opened for a future release has **no shows today**, so a lookup for today
-returns an empty page. Set it to the release date and the check asks for the
-right day until that day arrives, then follows today on its own.
+returns an empty page. Set it to the date you actually want to watch on and
+the check asks for that day.
+
+### Watching more than one date
+
+When any of a few days would do, list them:
+
+```json
+"show_dates": ["2026-09-26", "2026-09-27", "2026-09-28"]
+```
+
+Each date is a **separate watch**: its own showtimes lookup, its own alerts and
+its own acks. `AMB (HDR By Barco)` going live on the 27th tells you so in the
+title (`… now has shows on Sun 27 Sep!`), and tapping *Got it* there leaves the
+26th — the day you actually wanted — still being watched. The booking-open
+alert grows one block per date:
+
+```
+Sat 26 Sep:
+  Your theatres with shows (1):
+    - AMB Cinemas: Gachibowli - HDR By Barco
+
+  Still waiting on:
+    - PRHN (PCX): listed, running English • 2D
+
+Sun 27 Sep:
+  None of your theatres yet (71 other venue(s) listed). …
+```
+
+Two things to keep in mind. **A date that has passed is dropped**, not rolled
+forward to today — a lookup for a past day returns an empty page, which is the
+same silent zero-venue failure `show_date` exists to avoid. If every listed
+date has passed, the check falls back to today and to the old, undated acks.
+And **each date costs a page load** (plus the `SHOWTIMES_DELAY_MS` pause), only
+while booking is open and something on that date is still unaccounted for — so
+a handful of dates is fine, a fortnight of them makes each run minutes long.
 
 > The run log tells these apart. A zero-venue payload is reported as either
 > *"no shows listed for this date/language"* (wrong code, wrong date, or
@@ -122,6 +157,7 @@ which is precisely the alert you were waiting for.
 | Not open yet                       | silent                                      |
 | Booking open, un-acked             | alerts on **every run** (~5 min)            |
 | A watched screen goes live, un-acked | its own alert, repeating every run        |
+| The same screen on another watched date | a separate alert, with a separate ack  |
 | Acked                              | that alert alone stops; the rest keep going |
 | *Booked - stop all* tapped         | the whole movie goes quiet, permanently     |
 
@@ -159,6 +195,9 @@ Still waiting on:
   - AMB (IMAX): listed, running English • 2D | LED SCREEN DOLBY ATMOS
   - Prasads (PCX): not listed yet
 ```
+
+(With `show_date`/`show_dates` set, each of those blocks is headed by the date
+it describes — see [Watching more than one date](#watching-more-than-one-date).)
 
 Those last two lines are the point of the screen filter. *Listed, running …*
 means the theatre is onboarded but not on the screen you want; *not listed
@@ -200,9 +239,11 @@ BMS records per showtime (`English • 2D | LED SCREEN DOLBY ATMOS`). So
 *LED SCREEN DOLBY ATMOS*, `"IMAX 3D"` narrows to the 3D one, and `"PCX"`
 matches nothing but PCX.
 
-**Each venue+screen pair is watched separately.** `AMB (IMAX)` and
-`AMB (4DX)` each get their own first-seen alert and their own state marker, so
-AMB opening 4DX never marks its IMAX as done.
+**Each venue+screen pair is watched separately, on each watched date.**
+`AMB (IMAX)` and `AMB (4DX)` each get their own first-seen alert and their own
+state marker, so AMB opening 4DX never marks its IMAX as done — and with
+`show_dates` set, `AMB (IMAX)` on the 26th and on the 27th are two watches
+again.
 
 > A screen whose format BMS cannot tell us is reported as
 > `screens unreadable`, never as absent. "We couldn't read the screens" and
@@ -241,8 +282,8 @@ command builds a reference for any city.
 if none of your theatres are listed yet — theatres get onboarded
 progressively, and waiting for yours could cost you the opening rush. Each
 watched theatre or screen then gets **its own** push the first time it appears
-(`AMB Cinemas: Gachibowli - HDR By Barco now has shows!`), repeating until you
-ack that one.
+(`AMB Cinemas: Gachibowli - HDR By Barco now has shows on Sat 26 Sep!`),
+repeating until you ack that one.
 
 So a run can legitimately send several notifications: one per thing you asked
 about that is live and un-acked. That is the deliberate trade for being able
@@ -274,15 +315,17 @@ screen format rather than the one BMS would auto-select:
 
 ### Two caveats worth knowing
 
-1. **It covers one date and one language.** The date is today, or
-   `show_date` while that is still ahead. `etCodes=*` gets all screen
+1. **It covers one language, and only the dates you list.** The dates are
+   `show_date` / `show_dates`, or today when neither is set — a day you did
+   not list is never looked at. `etCodes=*` gets all screen
    formats, but for a multi-language release BMS serves one language unless
    you set `language` — and the screen strings carry that language, so a
    venue can look screen-less simply because you are reading the wrong
    slice. A theatre's absence is not hard proof it isn't showing the movie;
    treat the list as a positive signal.
-2. **It costs a second page load.** Only while booking is open and some of
-   your theatres are still missing, with a `SHOWTIMES_DELAY_MS` (default 6s)
+2. **It costs a second page load, per watched date.** Only while booking is
+   open and some of your theatres are still missing on that date, with a
+   `SHOWTIMES_DELAY_MS` (default 6s)
    pause first — loading the movie page and showtimes page back-to-back earned
    a real Cloudflare 403 during development. If the showtimes page is blocked,
    or yields no venues at all, the alert still fires and simply says it
