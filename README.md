@@ -1,9 +1,8 @@
 # 🔔 Drop Watcher
 
 Watches **any number of BookMyShow movie pages** for ticket **booking
-opening**, and **Shopify product pages** for coming back **in stock**, then
-pushes a phone notification (via **ntfy**) — runs free on **GitHub Actions**,
-so your laptop doesn't need to be on.
+opening**, then pushes a phone notification (via **ntfy**) — runs free on
+**GitHub Actions**, so your laptop doesn't need to be on.
 
 ---
 
@@ -350,77 +349,18 @@ cache supplies the *memory*.
 
 ---
 
-## Product restocks (Shopify)
+## Schedule
 
-Targets live in [`products.json`](products.json):
-
-```json
-[
-  {
-    "id": "furjaden-dark-knight-batpack",
-    "name": "Fur Jaden x Batman - The Dark Knight Backpack",
-    "url": "https://www.furjaden.com/products/the-dark-knight-batpack",
-    "enabled": true
-  }
-]
-```
-
-| Field     | Notes                                                            |
-|-----------|------------------------------------------------------------------|
-| `url`     | **Required.** The product page URL (any Shopify store).          |
-| `id`      | Stable key for acknowledgements. Defaults to the URL's last path segment. |
-| `name`    | Shown in the notification title.                                 |
-| `watch_from` | Optional `YYYY-MM-DD` (**IST**). Before this date the product is skipped entirely — no network call. A malformed date is ignored with a warning, so it fails *open*. |
-| `enabled` | Set `false` to park it without deleting it. Defaults to `true`.  |
-
-### How stock is detected
-
-Appending **`.js`** to any Shopify product URL returns the storefront JSON,
-which carries an explicit boolean:
-
-```json
-{ "available": false,
-  "variants": [ { "title": "Default Title", "available": false,
-                  "inventory_policy": "deny" } ] }
-```
-
-That is a far stronger signal than the BookMyShow scraping: **one HTTP GET, no
-browser, no anti-bot, no DOM guessing.** `available` flips to `true` the moment
-stock is added. Products are checked *before* the movies precisely because they
-need no browser — they still work on a run where Chromium fails to install.
-
-> Use `.js`, **not** `.json`. The `.json` endpoint on the same URL omits the
-> `available` field entirely, so it cannot answer the question.
-
-If the payload ever lacks `available` (store moves off Shopify, URL changes),
-the run **fails loudly** rather than reporting "out of stock" — a silent false
-negative would mean never being told.
-
-Stock alerts repeat every run while in stock, with a **Buy now** button and a
-**Got it - stop alerts** ack. A product is one thing rather than a movie's
-several, so its ack is the whole story — there is no per-theatre split here.
-
----
-
-## Schedules
-
-Two independent workflows, so the two watchers keep their own cadence:
-
-| Workflow | Watches | Cron | Notes |
-|----------|---------|------|-------|
-| [`movies.yml`](.github/workflows/movies.yml) | `movies.json` | every **5 min** | Installs Chromium (BMS needs a real browser). |
-| [`stock.yml`](.github/workflows/stock.yml) | `products.json` | every **10 min** | **No Chromium** — a Shopify check is one HTTP GET, so the run takes seconds. |
-
-Each is scoped with `--only movies` / `--only products`, so neither redoes the
-other's work, and each keeps its **own** `.state` cache key — sharing one key
-would let the two clobber each other's markers.
+One workflow, [`movies.yml`](.github/workflows/movies.yml), watches
+`movies.json` every **5 min**. It installs Chromium, because BMS needs a real
+browser.
 
 > GitHub's cron floor is 5 minutes and its scheduler is best-effort, so a run
-> can land a few minutes late. Start dates are therefore enforced in the script
-> (`watch_from`, in IST) rather than in cron, which is UTC.
+> can land a few minutes late. Show dates are therefore enforced in the script
+> (in IST) rather than in cron, which is UTC.
 
-To change a cadence, edit that workflow's `cron`. To stop one watcher without
-touching the other: Actions tab → pick the workflow → **⋯ → Disable workflow**.
+To change the cadence, edit the workflow's `cron`. To stop the watcher:
+Actions tab → **Movie Ticket Watcher** → **⋯ → Disable workflow**.
 
 ---
 
@@ -467,9 +407,8 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 
 ### 4. Enable + test
 - Repo → **Actions** tab → enable workflows if prompted.
-- Open **Movie Ticket Watcher** (or **Product Stock Watcher**) → **Run
-  workflow** (manual trigger) to do a live
-  check now. Watch the logs — each movie gets its own `==== <movie> ====` block.
+- Open **Movie Ticket Watcher** → **Run workflow** (manual trigger) to do a
+  live check now. Watch the logs — each movie gets its own `==== <movie> ====` block.
 - The cron then runs it automatically every ~5 minutes.
 
 ---
@@ -532,8 +471,7 @@ The detection logic is identical everywhere — only *where* it runs changes.
 - **To stop one alert**: tap its **Got it - …** button — that theatre or
   screen only. **To stop a whole movie**: tap **Booked - stop all** on any of
   its alerts, or set `"enabled": false` in `movies.json`.
-- **To stop everything**: Actions tab → disable **both** *Movie Ticket
-  Watcher* and *Product Stock Watcher*.
+- **To stop everything**: Actions tab → disable *Movie Ticket Watcher*.
 - The `.state` cache is keyed per run and restored via the `bms-alert-state-`
   prefix. Clearing the repo's Actions caches resets acknowledgements, so open
   movies would start alerting again.

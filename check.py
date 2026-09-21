@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 """
-Release watcher: BookMyShow ticket openings and Shopify restocks.
+Release watcher: BookMyShow ticket openings.
 
 Loads every enabled movie page from movies.json in a real headless Chromium
 browser, decides whether ticket booking has opened, and pushes a notification
 via ntfy when it has.
-
-Also watches Shopify products listed in products.json for coming back in
-stock. Those need no browser at all — appending `.js` to a Shopify product URL
-returns JSON with an explicit `available` boolean — so they are checked first
-and still work if Chromium is unavailable.
 
 Designed to run as a near-stateless one-shot from a GitHub Actions cron job.
 The only state kept between runs is a small "you already acknowledged this
@@ -56,9 +51,9 @@ import urllib.request
 
 from playwright.sync_api import sync_playwright
 
-# A Windows console defaults to cp1252, where printing a non-ASCII movie or
-# product title (a Telugu name, a rupee sign) raises UnicodeEncodeError and
-# kills the whole run. Force UTF-8 output before anything can print.
+# A Windows console defaults to cp1252, where printing a non-ASCII movie
+# title (a Telugu name) raises UnicodeEncodeError and kills the whole run.
+# Force UTF-8 output before anything can print.
 for _stream in (sys.stdout, sys.stderr):
     try:
         _stream.reconfigure(encoding="utf-8", errors="replace")
@@ -67,7 +62,6 @@ for _stream in (sys.stdout, sys.stderr):
 
 # --- Config (env vars override these defaults) ------------------------------
 MOVIES_FILE = os.environ.get("MOVIES_FILE", "movies.json")
-PRODUCTS_FILE = os.environ.get("PRODUCTS_FILE", "products.json")
 STATE_DIR = os.environ.get("STATE_DIR", ".state")
 NTFY_SERVER = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
 # .strip() because a topic pasted into a GitHub secret can pick up a trailing
@@ -90,7 +84,7 @@ BMS_RETRY_DELAY_MS = int(os.environ.get("BMS_RETRY_DELAY_MS", "15000"))
 # Pause between a movie page and its showtimes page — two back-to-back loads
 # from one IP is what tripped Cloudflare during development.
 SHOWTIMES_DELAY_MS = int(os.environ.get("SHOWTIMES_DELAY_MS", "6000"))
-# Runners are UTC; product "watch_from" dates are meant in local Indian time.
+# Runners are UTC; show dates are meant in local Indian time.
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 # Budget for the open alert's per-date theatre section. ntfy's hard limit is
 # 4096 bytes for the WHOLE message and it rejects anything longer outright, so
@@ -204,116 +198,6 @@ def today_ist():
     "watch_from" of the 14th would not start until the 14th morning IST.
     """
     return datetime.datetime.now(IST).date()
-
-
-def load_products():
-    """Return Shopify product targets from products.json (optional file)."""
-    if not os.path.exists(PRODUCTS_FILE):
-        return []
-    with open(PRODUCTS_FILE, encoding="utf-8") as f:
-        raw = json.load(f)
-
-    today = today_ist()
-    targets = []
-    for entry in raw:
-        label = entry.get("name") or entry.get("url")
-        if not entry.get("enabled", True):
-            print(f"-- skipping (disabled): {label}")
-            continue
-
-        # Optional "don't even look before this date" (IST).
-        start = entry.get("watch_from")
-        if start:
-            try:
-                start_date = datetime.datetime.strptime(start, "%Y-%m-%d").date()
-            except ValueError:
-                print(f"!! bad watch_from {start!r} for {label} - ignoring",
-                      file=sys.stderr)
-                start_date = None
-            if start_date and today < start_date:
-                days = (start_date - today).days
-                print(f"-- skipping (watch starts {start}, {days} day(s) away): "
-                      f"{label}")
-                continue
-
-        url = entry["url"].split("?")[0].rstrip("/")
-        targets.append(
-            {
-                "id": entry.get("id") or url.rsplit("/", 1)[-1],
-                "name": entry.get("name") or url.rsplit("/", 1)[-1],
-                "url": url,
-            }
-        )
-    return targets
-
-
-# --- Shopify stock ----------------------------------------------------------
-def fetch_product(url):
-    """Fetch a Shopify storefront product payload.
-
-    Appending `.js` to any Shopify product URL returns the storefront JSON,
-    which carries an explicit per-variant `available` boolean. Note the `.json`
-    variant of this endpoint omits `available`, so it is NOT interchangeable.
-    """
-    req = urllib.request.Request(
-        url + ".js",
-        headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=25) as resp:
-        payload = resp.read().decode("utf-8", "replace")
-    data = json.loads(payload)
-    if "available" not in data:
-        # Never treat a shape change as "out of stock" — that would go quiet
-        # forever instead of alerting.
-        raise RuntimeError(
-            "no 'available' field in payload - not a Shopify product page?"
-        )
-    return data
-
-
-def check_product(product):
-    """Return (in_stock, product_payload, available_variant_names)."""
-    data = fetch_product(product["url"])
-    live = [
-        v.get("title") or "Default"
-        for v in data.get("variants", [])
-        if v.get("available")
-    ]
-    in_stock = bool(data.get("available")) or bool(live)
-    print(f"   title      : {data.get('title')!r}")
-    print(f"   available  : {data.get('available')!r}")
-    print(f"   variants   : {len(data.get('variants', []))} "
-          f"({len(live)} in stock)")
-    return in_stock, data, live
-
-
-def send_product_alert(product, data, live):
-    """Push a back-in-stock alert. Returns True if ntfy accepted it."""
-    if not NTFY_TOPIC:
-        print("!! NTFY_TOPIC not set - cannot send notification", file=sys.stderr)
-        return False
-
-    # Shopify prices are integer paise/cents.
-    price = data.get("price")
-    price_line = f"\n₹{price / 100:,.0f}" if isinstance(price, int) else ""
-    variants = ""
-    if live and live != ["Default Title"]:
-        variants = f"\nIn stock: {', '.join(live)}"
-
-    return _publish(
-        {
-            "topic": NTFY_TOPIC,
-            "title": f"{product['name']} is IN STOCK!",
-            "message": (
-                f"{data.get('title') or product['name']}"
-                f"{price_line}{variants}\n{product['url']}"
-            ),
-            "priority": 5,
-            "tags": ["shopping_bags"],
-            "click": product["url"],
-            "actions": _actions_for(product, "Buy now"),
-        }
-    )
 
 
 # --- Theatres / showtimes ---------------------------------------------------
@@ -973,8 +857,8 @@ def _actions_for(movie, label="Book now", ack_id=None,
 
     `ack_id` is what the narrow ack button POSTs, and so decides what gets
     silenced: the movie id for the booking-open alert, a per-theatre id for a
-    theatre alert. Defaults to the movie so products and ad-hoc sends are
-    unchanged.
+    theatre alert. Defaults to the movie, which is what the booking-open and
+    ad-hoc sends want.
 
     `all_button` adds the movie-wide stop on top of it — "I have booked, I am
     done with this film" — which is the only way to silence a theatre you have
@@ -1250,7 +1134,7 @@ def list_venues_cli(argv):
 
 
 USAGE = (
-    "usage: python check.py [--only movies|products]\n"
+    "usage: python check.py\n"
     "       python check.py --venues <bookable-movie-url> "
     "[--language <lang>] [--date YYYYMMDD]"
 )
@@ -1312,30 +1196,17 @@ def main():
         list_venues_cli(argv[1:])
         return
 
-    # --only lets the movie and product watchers run on separate schedules
-    # without each redoing the other's work.
-    only = None
-    if argv[:1] == ["--only"]:
-        if len(argv) < 2 or argv[1] not in ("movies", "products"):
-            print(USAGE, file=sys.stderr)
-            sys.exit(2)
-        only = argv[1]
-        argv = argv[2:]
     if argv:
         print(f"unknown arguments: {' '.join(argv)}\n{USAGE}", file=sys.stderr)
         sys.exit(2)
 
     try:
-        targets = [] if only == "products" else load_targets()
-        # An ad-hoc BMS_URL run is about that one movie; skip products.
-        products = (
-            [] if (only == "movies" or BMS_URL) else load_products()
-        )
+        targets = load_targets()
     except Exception as e:
         print(f"!! could not load targets: {e}", file=sys.stderr)
         sys.exit(1)
 
-    if not targets and not products:
+    if not targets:
         print("Nothing to check.")
         return
 
@@ -1345,49 +1216,16 @@ def main():
     # theatres has been acked — acking the open alert no longer takes the
     # theatres down with it.
     pending = [m for m in targets if pending_alerts(m)]
-    pending_products = [p for p in products if not is_acked(p["id"])]
     for m in targets:
         if not pending_alerts(m):
             why = ("booked - all alerts stopped" if is_silenced(m["id"])
                    else "every alert acknowledged")
             print(f"-- skipping ({why}): {m['name']}")
-    for p in products:
-        if is_acked(p["id"]):
-            print(f"-- skipping (already acknowledged): {p['name']}")
-    if not pending and not pending_products:
+    if not pending:
         print("Everything has been acknowledged - nothing to watch.")
         return
 
     failures = []
-
-    # Products first: a plain HTTP GET, so they don't need (or wait for) the
-    # browser and still run if Chromium is unavailable.
-    for product in pending_products:
-        print(f"\n==== {product['name']} (stock) ====")
-        try:
-            in_stock, data, live = check_product(product)
-        except Exception as e:
-            print(f"!! stock check failed for {product['name']}: {e}",
-                  file=sys.stderr)
-            failures.append(product["name"])
-            continue
-
-        if in_stock:
-            print(f">>> IN STOCK: {product['name']} - sending alert")
-            if send_product_alert(product, data, live):
-                record_alerted(product["id"])
-            else:
-                # An undelivered alert is a failed run, not a green one.
-                failures.append(f"{product['name']} (alert not delivered)")
-        else:
-            print(">>> still out of stock")
-
-    if not pending:
-        if failures:
-            print(f"\n!! {len(failures)} check(s) failed: {', '.join(failures)}",
-                  file=sys.stderr)
-            sys.exit(1)
-        return
 
     with sync_playwright() as p:
         browser = p.chromium.launch(

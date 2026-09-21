@@ -58,7 +58,7 @@ jobs:
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
         run: |
           mkdir -p .state
-          python check.py --only movies
+          python check.py
 
       # if: always() so an acknowledgement recorded before a later movie's
       # check failed still persists.
