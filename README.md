@@ -148,6 +148,21 @@ a theatre watch says *"and it is at the cinema you wanted"*. With no
 `theatres` listed, any venue in the city counts — which is usually what you
 want for a premiere, where whichever screen opens first is the one you book.
 
+> **BookMyShow never says "no shows on this date".** Asked for a date with
+> none, it silently serves the next date that *has* them — HTTP 200, full
+> venue list, no error. A request for the 23rd came back carrying the 24th's
+> five Kakinada venues, which read as *"the premiere is on sale"* and fired a
+> false alert. Every showtimes payload is therefore checked against the date
+> that was actually requested, and a mismatch is reported as *no shows on
+> sale yet*.
+>
+> Two signals do that, because the obvious one is not enough on its own. The
+> date strip (`"dateCode"`) lists a 23rd chip whenever the premiere exists
+> *somewhere in the country*, even where your city has nothing — so the
+> authority is `"showDate"`, the single date the payload was built for. A
+> payload carrying neither key is passed through with a loud warning rather
+> than treated as empty: an unrecognised shape must not silence the watcher.
+
 > **`book_code` matters even more here.** With the wrong code the showtimes
 > page is empty *for every date*, so a watch that says nothing looks exactly
 > like a premiere that hasn't dropped. Confirm it once by opening the date

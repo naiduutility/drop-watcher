@@ -379,6 +379,13 @@ VENUE_CARD = '"type":"venue-card"'
 # "PCX SCREEN" — so a 2D and a 3D IMAX show stay distinguishable.
 SCREEN_ATTR_RE = re.compile(r'"screenAttr":"([^"]+)"')
 SCREEN_FORMAT_RE = re.compile(r'"format":"([^"]*•[^"]*)"')
+# The date the payload is ACTUALLY for, and the date strip it offers. BMS does
+# not serve an empty page for a date with no shows — it quietly serves the
+# next date that has them — so these are what tell the two apart.
+SHOW_DATE_RE = re.compile(r'"showDate"\s*:\s*"(\d{8})"')
+DATE_CODE_RE = re.compile(r'"dateCode"\s*:\s*"(\d{8})"')
+# The date in a showtimes URL: .../buytickets/ET00518514/20260923?...
+URL_DATE_RE = re.compile(r"/buytickets/[^/]+/(\d{8})")
 
 
 def parse_screens(segment):
@@ -391,6 +398,48 @@ def parse_screens(segment):
             seen.add(key)
             out.append(label)
     return out
+
+
+def check_served_date(html, url):
+    """Raise unless the payload is really for the date `url` asked for.
+
+    BookMyShow does NOT return an empty page for a date with no shows. It
+    silently serves the first date that HAS them, with a full venue list and
+    HTTP 200. A request for the 23rd therefore came back carrying the 24th's
+    five venues, which read as "the premiere is on sale" and fired a false
+    alert — the worst kind, because acking it retires the watch you were
+    waiting on.
+
+    Two independent signals, since one key going stale must not take the
+    check with it:
+      "showDate" — the single date the payload was built for.
+      "dateCode" — the date strip, i.e. every date that has shows at all.
+    A payload carrying NEITHER is left alone with a warning rather than
+    treated as empty: an unrecognised shape must not silence the watcher.
+    """
+    want = URL_DATE_RE.search(url)
+    if not want:
+        return
+    want = want.group(1)
+    served = SHOW_DATE_RE.findall(html)
+    offered = sorted(set(DATE_CODE_RE.findall(html)))
+
+    if served and want not in served:
+        raise RuntimeError(
+            f"no shows listed for this date - asked for {want}, BMS served "
+            f"{served[0]}" + (f"; it offers {', '.join(offered)}"
+                              if offered else "")
+        )
+    if not served and offered and want not in offered:
+        raise RuntimeError(
+            f"no shows listed for this date - {want} is not among the dates "
+            f"BMS offers ({', '.join(offered)})"
+        )
+    if not served and not offered:
+        print(f"!! could not confirm the date BMS served for {want} "
+              "(no showDate/dateCode in the payload) - the date guard is "
+              "stale and a wrong-date venue list would slip through",
+              file=sys.stderr)
 
 
 def parse_venues(html):
@@ -495,6 +544,9 @@ def scrape_venues(context, movie, when=None):
         html = page.content()
     finally:
         page.close()
+
+    # Before believing a single venue: is this even the day we asked for?
+    check_served_date(html, url)
 
     venues = parse_venues(html)
     if not venues:
