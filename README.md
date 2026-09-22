@@ -43,6 +43,9 @@ Targets live in [`movies.json`](movies.json) — one object per movie:
 | `book_code` | Optional. The **booking** event code, when it differs from the movie page's — see below. Omitted = the code in `url`. |
 | `show_date` | Optional `YYYY-MM-DD`. The date to read showtimes for, when booking opens ahead of release. |
 | `show_dates` | Optional list of `YYYY-MM-DD`. **Watch several dates at once** — each is checked, alerted and acked on its own. Combines with `show_date`; dates already past are dropped. |
+| `watch_shows` | Optional. `true` = alert the moment a watched date has **any** show listed, whatever the theatre — the premiere case, see below. |
+| `ntfy_topic` | Optional. Send this movie's alerts to a topic of its own instead of `NTFY_TOPIC`. Write it as `"${SECRET_NAME}"` to read the topic from the environment rather than committing it. |
+| `ntfy_ack_topic` | Optional. Ack topic for a movie with its own `ntfy_topic`. Defaults to `<ntfy_topic>-ack`, never the shared ack topic. |
 | `showtimes_url` | Optional. A complete showtimes URL, used verbatim, when none of the above gets you the right page. Pins **one** date, so it needs editing once that date passes and cannot be used with `show_dates`. |
 | `enabled`   | Set `false` to park a movie without deleting it. Defaults to `true`. |
 
@@ -106,6 +109,51 @@ And **each date costs a page load** (plus the `SHOWTIMES_DELAY_MS` pause), only
 while booking is open and something on that date is still unaccounted for — so
 a handful of dates is fine, a fortnight of them makes each run minutes long.
 
+### Waiting for one date to go on sale (premieres)
+
+A film releasing on the 24th with a **premiere on the 23rd** breaks the usual
+flow: booking is *already open*, so the booking-open alert fires at once and
+tells you nothing you didn't know. The news you are waiting for is the 23rd
+itself appearing on BookMyShow — a fact about the **date**, not about any
+cinema, so no theatre watch can deliver it.
+
+```json
+{
+  "show_dates": ["2026-09-23"],
+  "watch_shows": true
+}
+```
+
+Each run reads that date's showtimes page and stays silent while it is empty
+(*"no shows on sale yet"* in the log — a normal state, not a failure). The
+moment anything is listed you get:
+
+```
+The Paradise: shows are UP for Wed 23 Sep!
+
+Shows just appeared for Wed 23 Sep in Kakinada. Book now:
+https://in.bookmyshow.com/…/buytickets/ET00518514/20260923?etCodes=*&language=telugu
+
+  - Vijaya Lakshmi Cinemas: Kakinada
+  - Sri Gowri Cinemas: Kakinada
+```
+
+Its **Book now** button goes straight to that date's showtimes page rather
+than the movie page, whose CTA would only reopen the format picker. Like every
+other alert it repeats each run until acked, and its ack
+(`<id>@shows@<date>`) covers that date alone.
+
+This combines with `theatres`: `watch_shows` says *"the date went on sale"*,
+a theatre watch says *"and it is at the cinema you wanted"*. With no
+`theatres` listed, any venue in the city counts — which is usually what you
+want for a premiere, where whichever screen opens first is the one you book.
+
+> **`book_code` matters even more here.** With the wrong code the showtimes
+> page is empty *for every date*, so a watch that says nothing looks exactly
+> like a premiere that hasn't dropped. Confirm it once by opening the date
+> that **is** already bookable in a browser and reading the code out of the
+> URL.
+
 > The run log tells these apart. A zero-venue payload is reported as either
 > *"no shows listed for this date/language"* (wrong code, wrong date, or
 > genuinely nothing on) or *"payload shape changed, VENUE_RE is stale"* (the
@@ -155,6 +203,7 @@ which is precisely the alert you were waiting for.
 |------------------------------------|---------------------------------------------|
 | Not open yet                       | silent                                      |
 | Booking open, un-acked             | alerts on **every run** (~5 min)            |
+| A watched date goes on sale (`watch_shows`) | its own alert, repeating every run |
 | A watched screen goes live, un-acked | its own alert, repeating every run        |
 | The same screen on another watched date | a separate alert, with a separate ack  |
 | Acked                              | that alert alone stops; the rest keep going |
@@ -172,6 +221,42 @@ rejected outright, taking the whole notification with it:
 
 A movie is skipped entirely only once every one of its alerts is acked, or
 *stop all* has been tapped.
+
+### Sending one movie to its own topic
+
+By default every movie publishes to `NTFY_TOPIC`. A movie can have a topic of
+its own — a film you are watching with friends who shouldn't get your whole
+list, or one you want on a separate phone:
+
+```json
+{
+  "name": "The Paradise",
+  "ntfy_topic": "${NTFY_TOPIC_PARADISE}"
+}
+```
+
+A topic name **is** the password in ntfy, so committing one to a public repo
+hands it to everyone. Written as `"${NAME}"` the value is read from the
+environment instead — a GitHub secret, exactly like `NTFY_TOPIC` — and only
+the *name* of the secret lives in `movies.json`. Add the matching line to the
+workflow's `env:` block:
+
+```yaml
+NTFY_TOPIC_PARADISE: ${{ secrets.NTFY_TOPIC_PARADISE }}
+```
+
+A literal topic (`"ntfy_topic": "paradise-9f3k2x"`) also works, for a private
+repo or a local run.
+
+The **ack topic follows the alert topic**: a movie on its own topic acks to
+`<its topic>-ack` unless it sets `ntfy_ack_topic`, and never to the shared
+one — otherwise a tap from whoever you shared the topic with could silence it
+for you. Each run polls every ack topic in play, plus `NTFY_ACK_TOPIC`, so an
+ack sent before a movie was moved still lands.
+
+> If the referenced secret is missing, the run says so loudly and falls back
+> to `NTFY_TOPIC`. An alert on the wrong topic is noisy; an alert published
+> nowhere is the one failure this watcher exists to prevent.
 
 ---
 
@@ -397,6 +482,7 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 | `NTFY_TOPIC`     | alert topic, e.g. `bms-hyd-9f3k2x`        | ✅ yes   |
 | `NTFY_ACK_TOPIC` | ack topic, e.g. `bms-ack-7t1q8w`          | recommended (defaults to `<NTFY_TOPIC>-ack`) |
 | `ALERT_EMAIL`    | ⚠️ **leave this unset** — see below      | not usable on ntfy.sh |
+| `NTFY_TOPIC_…`   | a per-movie topic referenced from `movies.json` — see [Sending one movie to its own topic](#sending-one-movie-to-its-own-topic) | only if a movie uses one |
 
 > **Do not set `ALERT_EMAIL` on ntfy.sh.** The public server refuses e-mail
 > for anonymous publishers (`{"code":40053,"error":"anonymous email sending is

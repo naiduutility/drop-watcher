@@ -20,6 +20,11 @@ A movie may pin the date(s) it should be watched on ("show_date" for one,
 is checked, alerted and acknowledged separately: the screen you want on the
 26th is different news from the same screen on the 27th.
 
+A movie may ask to be told the moment a watched date goes on sale at all
+("watch_shows"), which is the premiere case: the film is already bookable for
+its release day, so the booking-open alert fired long ago and the only news
+left is the earlier date appearing.
+
 A movie may also list preferred "theatres". Those never gate the alert — the
 booking-open push always fires first, annotated with which of your theatres
 already have shows — but the first time one of them appears, that run's repeat
@@ -32,6 +37,10 @@ notification itself. That button POSTs the movie id to a second ntfy topic
 (NTFY_ACK_TOPIC), which this script polls at the start of each run. Because
 ntfy.sh only caches messages for ~12h, a seen ack is immediately written to
 STATE_DIR so it survives long after the ntfy cache has expired.
+
+Alerts go to NTFY_TOPIC unless a movie sets its own "ntfy_topic" — one film on
+a topic of its own, which its ack button follows so a tap there can only
+silence that film.
 
 Usage:
     python check.py                # check every enabled movie in movies.json
@@ -74,6 +83,12 @@ NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "").strip()
 NTFY_ACK_TOPIC = os.environ.get("NTFY_ACK_TOPIC", "").strip() or (
     f"{NTFY_TOPIC}-ack" if NTFY_TOPIC else ""
 )
+# A movie may route its own alerts elsewhere with "ntfy_topic" — one film you
+# want on a separate, shareable topic without moving the rest of the list.
+# A topic name IS the password in ntfy, so a value written as "${NAME}" is read
+# from the environment rather than committed: that is what lets a per-movie
+# topic live in a PUBLIC repo as a GitHub secret, like the two above.
+ENV_REF_RE = re.compile(r"^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$")
 # Optional email backup. NOTE: ntfy.sh rejects e-mail sending for anonymous
 # publishers (code 40053) and fails the WHOLE publish, push included — so a
 # rejected email is retried without it rather than losing the notification.
@@ -138,6 +153,25 @@ def movie_slug_from_url(url):
     return parts[-1] if parts else ""
 
 
+def resolve_topic(value, what):
+    """A configured topic, with a "${ENV_VAR}" reference expanded.
+
+    Returns "" for an unset reference, which every caller reads as "use the
+    global topic". Falling back is deliberate: an alert on the wrong topic is
+    merely noisy, while an alert published nowhere is the exact failure this
+    watcher exists to prevent — so the mistake is shouted about, not obeyed.
+    """
+    value = str(value or "").strip()
+    m = ENV_REF_RE.match(value)
+    if not m:
+        return value
+    resolved = os.environ.get(m.group(1), "").strip()
+    if not resolved:
+        print(f"!! {what} is {value} but {m.group(1)} is unset or empty - "
+              "falling back to the default topic", file=sys.stderr)
+    return resolved
+
+
 def load_targets():
     """Return target dicts — from BMS_URL if set, else movies.json."""
     if BMS_URL:
@@ -154,6 +188,9 @@ def load_targets():
                 "show_date": "",
                 "show_dates": [],
                 "showtimes_url": "",
+                "watch_shows": False,
+                "ntfy_topic": NTFY_TOPIC,
+                "ntfy_ack_topic": NTFY_ACK_TOPIC,
             }
         ]
 
@@ -166,10 +203,18 @@ def load_targets():
             print(f"-- skipping (disabled): {entry.get('name') or entry.get('url')}")
             continue
         url = entry["url"]
+        name = entry.get("name") or movie_id_from_url(url)
+        # Per-movie routing. The ack topic follows the ALERT topic, not the
+        # global ack topic: a movie moved to its own topic must not have its
+        # "Got it" taps land on the shared one, where a different phone's tap
+        # could silence it.
+        topic = resolve_topic(entry.get("ntfy_topic"), f"{name}'s ntfy_topic")
+        ack_topic = resolve_topic(entry.get("ntfy_ack_topic"),
+                                  f"{name}'s ntfy_ack_topic")
         targets.append(
             {
                 "id": entry.get("id") or movie_id_from_url(url),
-                "name": entry.get("name") or movie_id_from_url(url),
+                "name": name,
                 "city": entry.get("city", CITY),
                 "url": url,
                 "theatres": entry.get("theatres") or [],
@@ -186,6 +231,14 @@ def load_targets():
                 "show_date": entry.get("show_date", ""),
                 "show_dates": entry.get("show_dates") or [],
                 "showtimes_url": entry.get("showtimes_url", ""),
+                # "tell me the moment ANY show is listed on a watched date" —
+                # for a film already bookable for a later day, where the date
+                # you care about is the only news left.
+                "watch_shows": bool(entry.get("watch_shows")),
+                "ntfy_topic": topic or NTFY_TOPIC,
+                "ntfy_ack_topic": (
+                    ack_topic or (f"{topic}-ack" if topic else NTFY_ACK_TOPIC)
+                ),
             }
         )
     return targets
@@ -614,6 +667,46 @@ def theatre_ack_id(movie_id, wanted, day=None):
     return f"{movie_id}@{_slug(wanted)}{day_stamp(day)}"
 
 
+def shows_ack_id(movie_id, day=None):
+    """Ack key for "this date has shows at all", e.g. ET00518274@shows@20260923.
+
+    Separate from the theatre keys because it answers a different question —
+    "has the premiere gone on sale?" rather than "is my cinema running it?" —
+    and from the booking-open key because a film can be bookable for the 24th
+    for days before the 23rd's shows exist.
+    """
+    return f"{movie_id}@shows{day_stamp(day)}"
+
+
+def shows_marker(movie_id, day=None):
+    stamp = day_stamp(day).replace("@", "-")
+    return os.path.join(STATE_DIR, f"shows-{movie_id}{stamp}")
+
+
+def shows_seen(movie_id, day=None):
+    """True once this date has been reported as having shows at least once."""
+    return os.path.exists(shows_marker(movie_id, day))
+
+
+def record_shows(movie_id, day=None, venues=()):
+    """Remember that this date went on sale, and where.
+
+    The venue names are stored for the same reason the theatre markers store
+    them: the alert repeats until it is acked, and a repeat should not cost a
+    second showtimes page load to say the same thing.
+    """
+    names = [v["name"] for v in venues]
+    _touch(shows_marker(movie_id, day), "\n".join(names) or "shows listed")
+
+
+def shows_venue_names(movie_id, day=None):
+    try:
+        with open(shows_marker(movie_id, day), encoding="utf-8") as f:
+            return [ln.strip() for ln in f if ln.strip()]
+    except OSError:
+        return []
+
+
 def all_ack_id(movie_id):
     """Ack key for "stop everything about this movie", e.g. ET00514163@all.
 
@@ -641,6 +734,9 @@ def pending_alerts(movie):
         return []
     jobs = ["open"] if not is_acked(movie["id"]) else []
     for day in watch_days(movie):
+        if (movie.get("watch_shows")
+                and not is_acked(shows_ack_id(movie["id"], day))):
+            jobs.append(f"shows{day_stamp(day)}")
         jobs += [
             f"{i['label']}{day_stamp(day)}" for i in watchlist(movie)
             if not is_acked(theatre_ack_id(movie["id"], i["label"], day))
@@ -679,22 +775,44 @@ def theatre_venue_names(movie_id, wanted, day=None):
     return [n.split("theatre live: ")[-1] for n in names] or [wanted]
 
 
-def fetch_acks():
-    """Poll the ack topic and persist any acks we haven't recorded yet.
+def ack_topics(targets):
+    """Every ack topic that needs polling this run, de-duplicated.
+
+    A movie with its own "ntfy_topic" acks on its own ack topic, so one poll
+    no longer covers the list. NTFY_ACK_TOPIC is always included even when no
+    movie uses it, so an ack sent before a movie was moved to its own topic is
+    still picked up from the old one's cache.
+    """
+    out = []
+    for topic in [NTFY_ACK_TOPIC] + [m.get("ntfy_ack_topic") for m in targets]:
+        if topic and topic not in out:
+            out.append(topic)
+    return out
+
+
+def fetch_acks(targets):
+    """Poll every ack topic and persist any acks we haven't recorded yet."""
+    for topic in ack_topics(targets):
+        fetch_acks_from(topic)
+
+
+def fetch_acks_from(ack_topic):
+    """Poll one ack topic and persist any acks we haven't recorded yet.
 
     ntfy has no read receipts, so acks are explicit: the notification's action
     button POSTs the movie id here. A poll returns the topic's whole cache
     (~12h on ntfy.sh), hence the copy into STATE_DIR for durability.
     """
-    if not NTFY_ACK_TOPIC:
+    if not ack_topic:
         return
-    url = f"{NTFY_SERVER}/{NTFY_ACK_TOPIC}/json?poll=1&since=all"
+    url = f"{NTFY_SERVER}/{ack_topic}/json?poll=1&since=all"
     try:
         with urllib.request.urlopen(url, timeout=20) as resp:
             body = resp.read().decode("utf-8", "replace")
     except Exception as e:
         # A missing/empty ack topic is normal; never fail the run over this.
-        print(f"!! could not poll ack topic: {e}", file=sys.stderr)
+        print(f"!! could not poll ack topic {ack_topic!r}: {e}",
+              file=sys.stderr)
         return
 
     for line in body.splitlines():
@@ -709,7 +827,7 @@ def fetch_acks():
             continue
         ack_id = (msg.get("message") or "").strip()
         if ack_id:
-            record_ack(ack_id, "ntfy ack button")
+            record_ack(ack_id, f"ntfy ack button on {ack_topic}")
 
 
 # --- Notification -----------------------------------------------------------
@@ -840,19 +958,32 @@ def _publish(payload):
     return ok
 
 
-def _ack_action(label, ack_id):
+def _ack_action(label, ack_id, ack_topic):
     return {
         "action": "http",
         "label": label,
-        "url": f"{NTFY_SERVER}/{NTFY_ACK_TOPIC}",
+        "url": f"{NTFY_SERVER}/{ack_topic}",
         "method": "POST",
         "body": ack_id,
         "clear": True,
     }
 
 
+def alert_topic(movie):
+    """Where this movie's alerts are published. Global topic unless it has
+    its own. .get() rather than [] so a hand-built dict — the README's local
+    send test — still works."""
+    return movie.get("ntfy_topic") or NTFY_TOPIC
+
+
+def movie_ack_topic(movie):
+    """Where this movie's ack buttons POST to; pairs with alert_topic()."""
+    return movie.get("ntfy_ack_topic") or NTFY_ACK_TOPIC
+
+
 def _actions_for(movie, label="Book now", ack_id=None,
-                 ack_label="Got it - stop alerts", all_button=False):
+                 ack_label="Got it - stop alerts", all_button=False,
+                 url=None):
     """Buttons for one notification.
 
     `ack_id` is what the narrow ack button POSTs, and so decides what gets
@@ -868,27 +999,34 @@ def _actions_for(movie, label="Book now", ack_id=None,
     alert now uses all three (view + narrow ack + stop-all). A fourth is
     rejected outright, taking the whole publish with it.
     """
-    actions = [{"action": "view", "label": label, "url": movie["url"]}]
-    if NTFY_ACK_TOPIC:
-        actions.append(_ack_action(ack_label, ack_id or movie["id"]))
+    actions = [{"action": "view", "label": label,
+                "url": url or movie["url"]}]
+    ack_topic = movie_ack_topic(movie)
+    if ack_topic:
+        actions.append(
+            _ack_action(ack_label, ack_id or movie["id"], ack_topic)
+        )
         if all_button:
             actions.append(
-                _ack_action("Booked - stop all", all_ack_id(movie["id"]))
+                _ack_action("Booked - stop all", all_ack_id(movie["id"]),
+                            ack_topic)
             )
     return actions
 
 
 def send_alert(movie, reports=None):
     """Push a booking-open alert. Returns True if ntfy accepted it."""
-    if not NTFY_TOPIC:
-        print("!! NTFY_TOPIC not set - cannot send notification", file=sys.stderr)
+    topic = alert_topic(movie)
+    if not topic:
+        print("!! no ntfy topic for this movie (NTFY_TOPIC not set) - "
+              "cannot send notification", file=sys.stderr)
         return False
 
     # Published as JSON rather than via headers: metadata headers must be
     # latin-1 safe, which mangles non-ASCII movie titles.
     return _publish(
         {
-            "topic": NTFY_TOPIC,
+            "topic": topic,
             "title": f"{movie['name']} tickets are LIVE in {movie['city']}!",
             "message": (
                 "Booking just opened on BookMyShow. Tap to book now:\n"
@@ -906,6 +1044,63 @@ def send_alert(movie, reports=None):
     )
 
 
+def send_shows_alert(movie, day, names, first_time):
+    """Push "this date is on sale" for ONE watched date.
+
+    The alert a premiere waits on. Booking for a film that opens on the 24th
+    is already open, so the booking-open alert fired days ago and the only
+    news left is the moment the 23rd itself appears on BMS — which no theatre
+    watch can tell you, because it is about the date, not the cinema.
+
+    Like the others it repeats every run until acked, and carries its own ack
+    id, so "Got it" here leaves the other watched dates alone.
+    """
+    topic = alert_topic(movie)
+    if not topic:
+        print("!! no ntfy topic for this movie (NTFY_TOPIC not set) - "
+              "cannot send notification", file=sys.stderr)
+        return False
+
+    when = f" for {day_label(day)}" if day else ""
+    title = (
+        f"{movie['name']}: shows are UP{when}!" if first_time
+        else f"{movie['name']}: still on sale{when}"
+    )
+    lead = (
+        f"Shows just appeared{when} in {movie['city']}. Book now:"
+        if first_time else
+        f"Reminder - shows are listed{when} in {movie['city']}:"
+    )
+    # Bounded: ntfy rejects a message over 4096 bytes outright, and a city
+    # can list dozens of venues.
+    shown, extra = names[:12], max(0, len(names) - 12)
+    venues = ("\n\n" + "\n".join(f"  - {n}" for n in shown)
+              + (f"\n  (+{extra} more)" if extra else "")) if shown else ""
+    # Straight to the showtimes page for that date, not the movie page: the
+    # movie page's CTA opens a format picker and loses the day you want.
+    book_url = showtimes_url(movie, day)
+    return _publish(
+        {
+            "topic": topic,
+            "title": title,
+            "message": (
+                f"{lead}\n{book_url}"
+                f"{venues}"
+                f"\n\n\"Got it\" stops the alerts{when or ' for this date'} "
+                "only; \"Booked - stop all\" stops the whole movie."
+            ),
+            "priority": 5,
+            "tags": ["rotating_light"],
+            "click": book_url,
+            "actions": _actions_for(
+                movie, "Book now", shows_ack_id(movie["id"], day),
+                ack_label="Got it - this date", all_button=True,
+                url=book_url,
+            ),
+        }
+    )
+
+
 def send_theatre_alert(movie, wanted, names, first_time, what="theatre",
                        day=None):
     """Push an alert about ONE watched theatre or screen on ONE date.
@@ -917,8 +1112,10 @@ def send_theatre_alert(movie, wanted, names, first_time, what="theatre",
     alert it therefore repeats every run until it is acked; `first_time` only
     changes the wording.
     """
-    if not NTFY_TOPIC:
-        print("!! NTFY_TOPIC not set - cannot send notification", file=sys.stderr)
+    topic = alert_topic(movie)
+    if not topic:
+        print("!! no ntfy topic for this movie (NTFY_TOPIC not set) - "
+              "cannot send notification", file=sys.stderr)
         return False
 
     shown = ", ".join(names) or wanted
@@ -935,7 +1132,7 @@ def send_theatre_alert(movie, wanted, names, first_time, what="theatre",
     )
     return _publish(
         {
-            "topic": NTFY_TOPIC,
+            "topic": topic,
             "title": title,
             "message": (
                 f"{lead} in {movie['city']}{when}.\n{movie['url']}"
@@ -1210,7 +1407,7 @@ def main():
         print("Nothing to check.")
         return
 
-    fetch_acks()
+    fetch_acks(targets)
 
     # A movie is done only when its booking-open alert AND every one of its
     # theatres has been acked — acking the open alert no longer takes the
@@ -1270,6 +1467,18 @@ def main():
                     ]
                     for day, items in wanted.items()
                 }
+                # Dates still owed a "this date is on sale" alert, and of
+                # those the ones that actually need looking up — a date
+                # already known live re-alerts from its marker, for free.
+                shows_wanted = {
+                    day: bool(movie.get("watch_shows"))
+                    and not is_acked(shows_ack_id(movie["id"], day))
+                    for day in days
+                }
+                shows_outstanding = {
+                    day: shows_wanted[day] and not shows_seen(movie["id"], day)
+                    for day in days
+                }
 
                 # The context must outlive the whole per-movie body, because
                 # the theatre check opens a second page in it.
@@ -1311,7 +1520,7 @@ def main():
                                   "status": "ok"}
                         reports[day] = report
                         head = f"[{day}] " if day else ""
-                        if not outstanding[day]:
+                        if not outstanding[day] and not shows_outstanding[day]:
                             report["status"] = "all-live"
                             if movie["theatres"]:
                                 print(f"   {head}nothing left to look up - "
@@ -1344,6 +1553,14 @@ def main():
                                           f"{i['label']} "
                                           f"(running {screens_at(venues, i)})")
                         except Exception as e:
+                            # "Nothing on sale for this date yet" is the
+                            # normal, every-five-minutes state of a date being
+                            # watched for its shows to appear — reported as
+                            # news, not as a failure, so a real breakage still
+                            # stands out in the log.
+                            if "no shows listed" in str(e):
+                                print(f"   {head}no shows on sale yet")
+                                continue
                             # A theatre-list failure must never suppress the
                             # booking-open alert itself, nor the other dates.
                             print(f"!! {head}venue scrape failed: {e}",
@@ -1361,6 +1578,34 @@ def main():
                         # An undelivered alert is a failed run, not a green one.
                         failures.append(
                             f"{movie['name']} (open alert not delivered)"
+                        )
+
+                # "This date is on sale at all" — sent before the per-theatre
+                # alerts, because it is the news the others are a detail of.
+                for day in days:
+                    if not shows_wanted[day]:
+                        continue
+                    venues = reports[day]["venues"]
+                    seen = shows_seen(movie["id"], day)
+                    if venues:
+                        names = [v["name"] for v in venues]
+                        first_time = not seen
+                    elif seen:
+                        names = shows_venue_names(movie["id"], day)
+                        first_time = False
+                    else:
+                        continue  # nothing on sale for this date yet
+                    when = f" [{day}]" if day else ""
+                    print(f"   shows alert:{when or ' today'} "
+                          f"({'new' if first_time else 'repeat'}, "
+                          f"{len(names)} venue(s))")
+                    if send_shows_alert(movie, day, names, first_time):
+                        if first_time:
+                            record_shows(movie["id"], day, venues or [])
+                    else:
+                        failures.append(
+                            f"{movie['name']} / shows{when} "
+                            "(alert not delivered)"
                         )
 
                 for day in days:

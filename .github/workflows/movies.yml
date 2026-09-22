@@ -56,6 +56,10 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_ACK_TOPIC: ${{ secrets.NTFY_ACK_TOPIC }}
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+          # Per-movie topics. A movie's "ntfy_topic": "${NTFY_TOPIC_X}" reads
+          # the secret named here, so the topic itself is never committed.
+          # Add one line per extra topic.
+          NTFY_TOPIC_PARADISE: ${{ secrets.NTFY_TOPIC_PARADISE }}
         run: |
           mkdir -p .state
           python check.py
