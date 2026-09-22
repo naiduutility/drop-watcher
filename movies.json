@@ -51,7 +51,7 @@
     "enabled": true
   },
   {
-    "id": "ET00518274-premiere",
+    "id": "ET00518274-sep23",
     "name": "The Paradise",
     "city": "Kakinada",
     "url": "https://in.bookmyshow.com/movies/kakinada/the-paradise/ET00518274",
@@ -63,6 +63,6 @@
     "watch_shows": true,
     "theatres": [],
     "ntfy_topic": "${NTFY_TOPIC_PARADISE}",
-    "enabled": true
+    "enabled": false
   }
 ]

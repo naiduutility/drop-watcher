@@ -1144,10 +1144,16 @@ def send_shows_alert(movie, day, names, first_time):
             "priority": 5,
             "tags": ["rotating_light"],
             "click": book_url,
+            # No "stop all" here, deliberately. This alert exists to say
+            # one date went on sale; the movie-wide, irreversible stop does
+            # not belong a thumb's width from "Got it" — and ntfy keeps
+            # buttons tappable in the app's history, so tidying old
+            # notifications re-sends whatever they carry. The movie-wide
+            # stop stays on the booking-open alert, where it means what it
+            # says: "I have booked, I am done with this film".
             "actions": _actions_for(
                 movie, "Book now", shows_ack_id(movie["id"], day),
-                ack_label="Got it - this date", all_button=True,
-                url=book_url,
+                ack_label="Got it - this date", url=book_url,
             ),
         }
     )
