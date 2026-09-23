@@ -4,13 +4,14 @@
   "type": "module",
   "scripts": {
     "test": "tsx tests/engine.test.ts && tsx tests/core.test.ts && tsx tests/url.test.ts && tsx tests/session.test.ts",
-    "worker": "tsx src/worker/run.ts",
+    "worker": "tsx --env-file=.env.local src/worker/run.ts",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "invite": "tsx --env-file=.env.local scripts/invite.ts"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

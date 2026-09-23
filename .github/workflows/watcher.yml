@@ -1,0 +1,50 @@
+name: Drop Watcher (worker)
+
+# The old movies.yml watcher is untouched and still runs from movies.json.
+# This is its replacement, reading targets from Postgres instead. Both can run
+# side by side until the site fully takes over.
+
+on:
+  # GitHub's own scheduler throttles frequent crons hard — it was delivering
+  # roughly one run every five hours — so this exists as a backstop only. The
+  # real cadence comes from an external cron calling workflow_dispatch.
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+# One pass at a time. Targets are claimed FOR UPDATE SKIP LOCKED so overlapping
+# runs would be safe, but serialising keeps request volume at one IP honest.
+concurrency:
+  group: dw-worker
+  cancel-in-progress: false
+
+jobs:
+  pass:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - run: npm ci
+
+      # No browser install. Reads go out via curl, which is already on the
+      # runner: measured same-IP on 2026-09-23, curl returned the full payload
+      # in 0.6s where Node's fetch was refused outright and Playwright cost
+      # ~25s plus a download. The worker escalates to a browser only if curl is
+      # refused, and records BLOCKED honestly when no browser is available —
+      # which raises the degraded alert rather than looking like "no tickets".
+      - name: Run one pass
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          APP_URL: ${{ secrets.APP_URL }}
+          NTFY_SERVER: ${{ secrets.NTFY_SERVER }}
+        run: npx tsx src/worker/run.ts
