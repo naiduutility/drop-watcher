@@ -191,6 +191,26 @@ export const checks = pgTable("checks", {
 }));
 
 /**
+ * What was listed for one date, last time we read it cleanly.
+ *
+ * The city catalogue answers "which cinemas exist here"; this answers "which
+ * of them are running THIS film on THIS date", which is the only one a person
+ * staring at an on-sale watch actually wants. Costs nothing extra: the venues
+ * were already in a payload fetched to answer a different question.
+ */
+export const targetDates = pgTable("target_dates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  targetId: uuid("target_id").notNull().references(() => targets.id, { onDelete: "cascade" }),
+  showDate: text("show_date").notNull(),
+  venueCount: integer("venue_count").notNull().default(0),
+  venues: jsonb("venues").$type<{ code: string; name: string; screens: string[] | null }[]>()
+    .notNull().default([]),
+  seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  identity: uniqueIndex("target_dates_identity").on(t.targetId, t.showDate),
+}));
+
+/**
  * A self-maintaining catalogue of each city's cinemas.
  *
  * Built entirely from reads we already make: every ok_shows payload carries the

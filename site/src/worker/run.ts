@@ -16,7 +16,9 @@
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 
 import { db } from "../db/index.js";
-import { channels, checks, notifications, subscriptions, targets } from "../db/schema.js";
+import {
+  channels, checks, notifications, subscriptions, targetDates, targets,
+} from "../db/schema.js";
 import { isConclusive, showtimesUrl, type Reading } from "../engine/index.js";
 import { nextDueAt, planFetches, type Priority } from "../core/schedule.js";
 import {
@@ -257,6 +259,23 @@ export async function runPass(now = new Date()): Promise<void> {
           }
           // Only what actually reached somebody changes state.
           await applyEvents(delivered, now);
+
+          // What was listed for THIS date, so the watch's own page can show
+          // the cinemas rather than only a number.
+          if (reading.outcome === "ok_shows") {
+            await db.insert(targetDates).values({
+              targetId: target.id, showDate: date,
+              venueCount: reading.venues.length,
+              venues: reading.venues.map((v) => ({ code: v.code, name: v.name, screens: v.screens })),
+            }).onConflictDoUpdate({
+              target: [targetDates.targetId, targetDates.showDate],
+              set: {
+                venueCount: reading.venues.length,
+                venues: reading.venues.map((v) => ({ code: v.code, name: v.name, screens: v.screens })),
+                seenAt: new Date(),
+              },
+            });
+          }
 
           // Every venue this read saw goes into the city catalogue. Free:
           // the payload was fetched to answer a different question, and the
