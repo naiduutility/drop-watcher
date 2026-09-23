@@ -3,21 +3,29 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "tsx tests/engine.test.ts && tsx tests/core.test.ts",
+    "test": "tsx tests/engine.test.ts && tsx tests/core.test.ts && tsx tests/url.test.ts && tsx tests/session.test.ts",
     "worker": "tsx src/worker/run.ts",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "drizzle-kit": "^0.31.11",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",
+    "next": "^14.2.35",
     "playwright": "^1.63.0",
-    "postgres": "^3.4.9"
+    "postgres": "^3.4.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

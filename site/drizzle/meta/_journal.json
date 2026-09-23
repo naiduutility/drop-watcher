@@ -8,6 +8,13 @@
       "when": 1790144172764,
       "tag": "0000_breezy_jack_power",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790153080517,
+      "tag": "0001_young_sandman",
+      "breakpoints": true
     }
   ]
 }

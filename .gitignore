@@ -21,3 +21,4 @@ ms-playwright/
 # Node (site/)
 node_modules/
 .next/
+*.tsbuildinfo

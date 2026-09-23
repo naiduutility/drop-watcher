@@ -23,6 +23,7 @@ import {
   DEFAULT_POLICY, planEvents, type SubscriptionView, type WatchEvent,
 } from "../core/transitions.js";
 import { channelFor, type OutboundMessage } from "../notify/index.js";
+import { rememberVenues } from "../lib/venues.js";
 import { browserProvider, fetchShowtimes, sleep, PACING_MS } from "./fetch.js";
 
 const BATCH = Number(process.env.WORKER_BATCH ?? 8);
@@ -229,6 +230,14 @@ export async function runPass(now = new Date()): Promise<void> {
             await deliver(event, message, userIds);
           }
           await applyEvents(events, now);
+
+          // Every venue this read saw goes into the city catalogue. Free:
+          // the payload was fetched to answer a different question, and the
+          // venue list came along with it.
+          if (reading.venues.length > 0) {
+            const n = await rememberVenues(target.city, [...reading.venues]);
+            console.log(`   catalogued ${n} venue(s) for ${target.city}`);
+          }
 
           // The strip is refreshed by any successful read, which is why the
           // plan only ever has to spend one guaranteed request.
