@@ -147,10 +147,20 @@ export function WatchCard({ watch }: { watch: WatchView }) {
           <span className="text-lg font-extrabold leading-[1.15] tracking-tight1">{watch.title}</span>
           <span className="text-sm text-neutral-800">{watch.city}</span>
         </Link>
-        <div className="flex items-center gap-1.5 text-[13px] text-neutral-700">
-          <Check size={14} strokeWidth={2.5} />
-          <span>Reading fine · checked {watch.lastCleanReadAt ? `${watch.minutesSinceCleanRead} min ago` : "—"}</span>
-        </div>
+        {watch.notMine ? (
+          // The film IS bookable here. Saying "waiting, all good" would be a
+          // lie of omission, and the whole point of narrowing is that the
+          // person chose it — so tell them, don't silently drop it.
+          <div className="flex items-start gap-1.5 bg-ink px-2 py-1.5 text-[13px] font-semibold text-bg">
+            <EyeOff size={14} strokeWidth={2.5} className="mt-0.5 shrink-0" />
+            <span>On sale — but not on the screens you picked</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 text-[13px] text-neutral-700">
+            <Check size={14} strokeWidth={2.5} />
+            <span>Reading fine · checked {watch.lastCleanReadAt ? `${watch.minutesSinceCleanRead} min ago` : "—"}</span>
+          </div>
+        )}
       </div>
     </article>
   );

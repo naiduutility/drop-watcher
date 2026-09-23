@@ -22,6 +22,10 @@ export interface WatchView {
   venuesListed?: number;
   lastCleanReadAt: Date | null;
   minutesSinceCleanRead: number | null;
+  /** On sale somewhere, but this watch's narrowing means it cannot fire. The
+   *  card says so, because otherwise it reads "waiting, all good" while the
+   *  film is bookable at the cinema it names. */
+  notMine?: boolean;
 
   bookUrl: string;
   alsoWatching: Member[];

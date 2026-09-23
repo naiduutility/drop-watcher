@@ -11,6 +11,8 @@ import { AppHeader } from "../../../components/AppHeader.js";
 import { CinemaPicker } from "../../../components/CinemaPicker.js";
 import { DeleteWatch } from "../../../components/DeleteWatch.js";
 import { WatchHero, type CheckCell } from "../../../components/WatchHero.js";
+import { NotYourScreen } from "../../../components/NotYourScreen.js";
+import { narrowingReport, wrongScreens } from "../../../lib/narrowing.js";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +118,21 @@ export default async function WatchDetail({ params }: { params: { id: string } }
     redirect("/");
   }
 
+  async function widen(code: string) {
+    "use server";
+    const who = await currentUser();
+    if (!who) return;
+    const [mine] = await db.select().from(subscriptions)
+      .where(and(eq(subscriptions.id, params.id), eq(subscriptions.userId, who.id))).limit(1);
+    if (!mine) return;
+    // Drop the screen narrowing for that one cinema, keeping the cinema. The
+    // way out of a miss should cost one tap, not a re-edit of the whole watch.
+    await db.update(subscriptions)
+      .set({ cinemaPicks: mine.cinemaPicks.map((p) => p.code === code ? { ...p, screens: [] } : p) })
+      .where(eq(subscriptions.id, params.id));
+    redirect(`/w/${params.id}`);
+  }
+
   async function refine(form: FormData) {
     "use server";
     const who = await currentUser();
@@ -126,6 +143,9 @@ export default async function WatchDetail({ params }: { params: { id: string } }
     }).where(and(eq(subscriptions.id, params.id), eq(subscriptions.userId, who.id)));
     redirect(`/w/${params.id}`);
   }
+
+  // Why a narrowed watch is quiet: listed here, but not in the room asked for.
+  const misses = wrongScreens(narrowingReport(sub.cinemaPicks, listed?.venues ?? []));
 
   const cells: CheckCell[] = [...recent].reverse().map((c) => ({
     ok: CLEAN.includes(c.outcome),
@@ -153,6 +173,10 @@ export default async function WatchDetail({ params }: { params: { id: string } }
       />
 
       <main className="mx-auto max-w-[880px] px-4 pb-16 pt-5">
+        {state !== "silenced" ? (
+          <NotYourScreen misses={misses} bookUrl={bookUrl} widen={widen} />
+        ) : null}
+
         {state === "on_sale" && listed && listed.venues.length > 0 ? (
           <section className="mb-7">
             <h2 className="border-b-2 border-ink pb-2 text-xl font-extrabold tracking-tight1">

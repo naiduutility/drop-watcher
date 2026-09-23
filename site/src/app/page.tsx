@@ -14,6 +14,7 @@ import { CopyField } from "../components/CopyField.js";
 import { HealthBanner } from "../components/HealthBanner.js";
 import { StickyAction } from "../components/StickyAction.js";
 import { WatchCard } from "../components/WatchCard.js";
+import { listedButNotMine } from "../lib/narrowing.js";
 
 export const dynamic = "force-dynamic";
 
@@ -72,11 +73,13 @@ export default async function Home() {
           targetId: targetDates.targetId,
           showDate: targetDates.showDate,
           venueCount: targetDates.venueCount,
+          venues: targetDates.venues,
         })
         .from(targetDates)
         .where(inArray(targetDates.targetId, rows.map((r) => r.target.id)))
     : [];
   const listedCounts = new Map(counts.map((c) => [`${c.targetId}:${c.showDate}`, c.venueCount]));
+  const listedVenues = new Map(counts.map((c) => [`${c.targetId}:${c.showDate}`, c.venues]));
 
   const now = new Date();
   const watches: WatchView[] = rows.map(({ sub, target }) => ({
@@ -88,6 +91,12 @@ export default async function Home() {
     // From what was actually listed for THIS date, not the city catalogue.
     // Previously always undefined, so every on-sale card read "0 cinemas".
     venuesListed: listedCounts.get(`${target.id}:${sub.showDate}`),
+    notMine: listedButNotMine(
+      sub.cinemaPicks, sub.screenFilters,
+      (listedVenues.get(`${target.id}:${sub.showDate}`) ?? []).map((v) => ({
+        code: v.code, name: v.name, screens: v.screens,
+      })),
+    ),
     lastCleanReadAt: target.lastOkAt,
     minutesSinceCleanRead: minutesSince(target.lastOkAt, now),
     bookUrl: showtimesUrl(target.movieUrl, sub.showDate, {
