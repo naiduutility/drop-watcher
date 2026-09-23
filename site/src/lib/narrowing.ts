@@ -92,3 +92,25 @@ export function listedButNotMine(
   // No narrowing at all: anything listed would have fired already.
   return false;
 }
+
+/**
+ * The screens at one venue that this watch actually asked for.
+ *
+ * Used in the notification, so a narrowed watch reads "AMB Cinemas — HDR By
+ * Barco" rather than listing every room the cinema happens to be running. If
+ * nothing was narrowed, everything the venue runs is fair to show.
+ */
+export function matchedScreensFor(
+  picks: CinemaPick[], screenFilters: string[], venue: Venue,
+): string[] {
+  const all = formatChoices(venue.screens ?? []);
+  const pick = picks.find((p) => p.code.toUpperCase() === (venue.code ?? "").toUpperCase());
+
+  if (pick && pick.screens.length > 0) {
+    return pick.screens.filter((s) => screenMatches(s, venue));
+  }
+  if (!pick && screenFilters.length > 0) {
+    return screenFilters.filter((s) => screenMatches(s, venue));
+  }
+  return all;
+}

@@ -26,6 +26,7 @@ import {
 } from "../core/transitions.js";
 import { channelFor, type OutboundMessage } from "../notify/index.js";
 import { rememberVenues } from "../lib/venues.js";
+import { matchedScreensFor } from "../lib/narrowing.js";
 import { browserProvider, fetchShowtimes, sleep, PACING_MS } from "./fetch.js";
 import { envBaseUrl, envNumber } from "../lib/env.js";
 
@@ -241,8 +242,21 @@ export async function runPass(now = new Date()): Promise<void> {
             const bookingUrl = showtimesUrl(target.movieUrl, date, {
               bookCode: target.bookCode, language: target.language,
             });
-            const venuesLine = reading.venues.length
-              ? "\n\n" + reading.venues.slice(0, 12).map((v) => `  - ${v.name}`).join("\n")
+            // The venues that satisfied THIS subscription, not every cinema in
+            // the city. Someone watching only AMB's HDR By Barco was being
+            // sent all seventeen Hyderabad cinemas, burying the one line they
+            // actually wanted — and implying we were alerting on the rest.
+            const shown = event.kind === "degraded" ? [] : event.venues;
+            const mine = event.kind === "degraded"
+              ? undefined
+              : views.find((v) => v.id === event.subscriptionId);
+            const venuesLine = shown.length
+              ? "\n\n" + shown.slice(0, 12).map((v) => {
+                  const screens = mine
+                    ? matchedScreensFor(mine.cinemaPicks, mine.screenFilters, v)
+                    : [];
+                  return `  - ${v.name}${screens.length ? ` — ${screens.join(", ")}` : ""}`;
+                }).join("\n")
               : "";
             const message = messageFor(event, target.title, target.city, bookingUrl, venuesLine);
             if (!message) continue;
