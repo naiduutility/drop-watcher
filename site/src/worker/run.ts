@@ -25,9 +25,10 @@ import {
 import { channelFor, type OutboundMessage } from "../notify/index.js";
 import { rememberVenues } from "../lib/venues.js";
 import { browserProvider, fetchShowtimes, sleep, PACING_MS } from "./fetch.js";
+import { envBaseUrl, envNumber } from "../lib/env.js";
 
-const BATCH = Number(process.env.WORKER_BATCH ?? 8);
-const APP_URL = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+const BATCH = envNumber("WORKER_BATCH", 8);
+const APP_URL = envBaseUrl("APP_URL", "http://localhost:3000");
 
 function prettyDate(yyyymmdd: string): string {
   const d = new Date(
@@ -103,14 +104,30 @@ function messageFor(
   };
 }
 
-async function deliver(event: WatchEvent, message: OutboundMessage, userIds: string[]) {
+/**
+ * Returns true only if at least one channel ACCEPTED the message.
+ *
+ * The caller uses that to decide whether the alert counts as sent. Marking a
+ * subscription "fired" on a failed publish is the quietest possible way to
+ * lose an alert: the person is never told, and the database says they were.
+ */
+async function deliver(
+  event: WatchEvent, message: OutboundMessage, userIds: string[],
+): Promise<boolean> {
   const rows = await db
     .select()
     .from(channels)
     .where(and(inArray(channels.userId, userIds), eq(channels.active, true)));
 
+  if (rows.length === 0) {
+    console.error("!! nobody has a notification channel - alert has nowhere to go");
+    return false;
+  }
+
+  let anyDelivered = false;
   for (const row of rows) {
     const result = await channelFor(row).send(message);
+    if (result.ok) anyDelivered = true;
     await db.insert(notifications).values({
       subscriptionId: event.kind === "degraded" ? null : event.subscriptionId,
       channelId: row.id,
@@ -127,6 +144,7 @@ async function deliver(event: WatchEvent, message: OutboundMessage, userIds: str
       console.error(`!! delivery failed on ${row.kind}: ${result.error}`);
     }
   }
+  return anyDelivered;
 }
 
 async function applyEvents(events: WatchEvent[], now: Date) {
@@ -208,6 +226,7 @@ export async function runPass(now = new Date()): Promise<void> {
             durationMs, detail: reading.detail,
           });
 
+          const delivered: WatchEvent[] = [];
           const events = planEvents({
             target: {
               id: target.id, title: target.title, city: target.city,
@@ -227,9 +246,17 @@ export async function runPass(now = new Date()): Promise<void> {
             if (!message) continue;
             const userIds = event.kind === "degraded" ? event.userIds : [event.userId];
             console.log(`   -> ${event.kind} to ${userIds.length} user(s)`);
-            await deliver(event, message, userIds);
+            if (await deliver(event, message, userIds)) {
+              delivered.push(event);
+            } else {
+              // Left in its current state on purpose, so the next pass tries
+              // again. An alert nobody received must never be recorded as one
+              // they did.
+              console.error(`!! ${event.kind} NOT delivered - left armed to retry`);
+            }
           }
-          await applyEvents(events, now);
+          // Only what actually reached somebody changes state.
+          await applyEvents(delivered, now);
 
           // Every venue this read saw goes into the city catalogue. Free:
           // the payload was fetched to answer a different question, and the

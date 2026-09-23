@@ -16,6 +16,8 @@
  *   app, where it can be confirmed and reversed.
  */
 
+import { envBaseUrl } from "../lib/env.js";
+
 export interface OutboundMessage {
   title: string;
   body: string;
@@ -42,7 +44,7 @@ export interface Channel {
   send(message: OutboundMessage): Promise<SendResult>;
 }
 
-const NTFY_SERVER = (process.env.NTFY_SERVER ?? "https://ntfy.sh").replace(/\/+$/, "");
+const NTFY_SERVER = envBaseUrl("NTFY_SERVER", "https://ntfy.sh");
 
 /**
  * ntfy.sh with a per-user random topic.

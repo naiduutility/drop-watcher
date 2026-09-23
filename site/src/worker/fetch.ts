@@ -25,6 +25,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { Outcome, readShowtimes, type Reading } from "../engine/index.js";
+import { envNumber } from "../lib/env.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -33,7 +34,7 @@ const USER_AGENT =
   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 /** Breathing room between two loads from one IP. */
-export const PACING_MS = Number(process.env.PACING_MS ?? 6000);
+export const PACING_MS = envNumber("PACING_MS", 6000);
 
 export type Transport = "curl" | "browser";
 

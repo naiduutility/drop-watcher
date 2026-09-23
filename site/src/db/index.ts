@@ -11,6 +11,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 import * as schema from "./schema.js";
+import { envNumber } from "../lib/env.js";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -31,7 +32,7 @@ const pooled = url.includes("-pooler.");
 // max: 1 — a cron worker makes one short pass and exits; a pool would just
 // hold connections open against a free-tier limit for no benefit.
 const client = postgres(url, {
-  max: Number(process.env.DB_POOL ?? 1),
+  max: envNumber("DB_POOL", 1),
   prepare: !pooled,
 });
 
