@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/modernist-a03dd507-7fba-4621-8383-88587a1c3fc7/styles.css">
+  <script src="_ds/modernist-a03dd507-7fba-4621-8383-88587a1c3fc7/_ds_bundle.js"></script>
+  <style>a{color:var(--color-accent-700)} a:hover{color:var(--color-accent-800)}</style>
+</helmet>
+<div style="min-height:100%;display:flex;flex-direction:column;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)">
+  <header style="display:flex;align-items:center;gap:8px;padding:6px 16px 6px 4px;border-bottom:2px solid var(--color-divider)">
+    <a href="#" aria-label="Back" style="display:grid;place-items:center;width:44px;height:44px;color:var(--color-text)">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+    </a>
+    <span style="font-weight:800;font-size:17px;letter-spacing:-0.015em;margin-right:auto">Invites</span>
+    <span class="tag tag-neutral" style="display:flex;gap:4px;align-items:center">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+      Owner only
+    </span>
+  </header>
+  <main style="flex:1;width:100%;max-width:720px;margin:0 auto;padding:18px 16px 32px;display:flex;flex-direction:column;gap:22px">
+    <section style="display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--color-surface)">
+      <h1 style="font-size:24px;margin:0;letter-spacing:-0.02em">New invite</h1>
+      <p style="margin:0;font-size:14px;line-height:1.45;text-wrap:pretty">The link doesn't carry a name. Whoever opens it first types their own name and email, and the link dies the moment they do.</p>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:12px;color:var(--color-neutral-700)">Valid for</span>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);border:2px solid var(--color-text)">
+          <sc-for list="{{ durations }}" as="d" hint-placeholder-count="3">
+            <button onClick="{{ d.pick }}" aria-pressed="{{ d.on }}" style="min-height:48px;padding:0 12px;border:0;border-left:{{ d.sep }};background:{{ d.bg }};color:{{ d.fg }};font:inherit;font-weight:800;font-size:15px;text-align:left;cursor:pointer;transition:background .12s">{{ d.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <button class="btn btn-primary" onClick="{{ create }}" style="min-height:52px;justify-content:space-between;font-size:16px;padding:0 16px">
+        <span>Create invite link</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+      </button>
+    </section>
+
+    <section style="display:flex;flex-direction:column">
+      <div style="display:flex;align-items:baseline;gap:10px;padding-bottom:8px;border-bottom:2px solid var(--color-text)">
+        <h2 style="font-size:20px;margin:0;letter-spacing:-0.015em">Unclaimed</h2>
+        <span style="font-size:14px;color:var(--color-neutral-700)">{{ openCount }} · each works once</span>
+      </div>
+      <sc-for list="{{ open }}" as="i" hint-placeholder-count="2">
+        <div style="display:flex;flex-direction:column;gap:10px;padding:14px 0;border-bottom:1px solid var(--color-divider);background:{{ i.flash }};transition:background .6s">
+          <div style="display:flex;align-items:center;gap:10px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex:none"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <span style="flex:1;min-width:0;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums">{{ i.shown }}</span>
+            <button onClick="{{ i.toggleReveal }}" aria-label="{{ i.revealLabel }}" style="flex:none;display:grid;place-items:center;width:44px;height:44px;background:none;border:0;color:var(--color-text);cursor:pointer">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </div>
+          <span style="font-size:13px;color:var(--color-neutral-700)">Made {{ i.made }} · expires {{ i.expires }}</span>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <button onClick="{{ i.copy }}" style="min-height:48px;display:flex;align-items:center;gap:8px;padding:0 14px;border:2px solid var(--color-text);background:{{ i.copyBg }};color:{{ i.copyFg }};font:inherit;font-weight:800;font-size:15px;cursor:pointer;transition:background .15s">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+              {{ i.copyLabel }}
+            </button>
+            <a href="https://wa.me/" style="min-height:48px;display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--color-accent);color:#fff;font-weight:800;font-size:15px;text-decoration:none">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line></svg>
+              Share
+            </a>
+          </div>
+        </div>
+      </sc-for>
+    </section>
+
+    <section style="display:flex;flex-direction:column">
+      <div style="display:flex;align-items:baseline;gap:10px;padding-bottom:8px;border-bottom:2px solid var(--color-divider)">
+        <h2 style="font-size:20px;margin:0;letter-spacing:-0.015em">Claimed</h2>
+        <span style="font-size:14px;color:var(--color-neutral-700)">link is dead</span>
+      </div>
+      <sc-for list="{{ claimed }}" as="c" hint-placeholder-count="3">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--color-divider)">
+          <span style="width:36px;height:36px;flex:none;display:grid;place-items:center;background:var(--color-text);color:var(--color-bg);font-weight:800">{{ c.initial }}</span>
+          <span style="display:flex;flex-direction:column;flex:1;min-width:0">
+            <span style="font-size:15px;font-weight:800">{{ c.name }}</span>
+            <span style="font-size:13px;color:var(--color-neutral-700);overflow:hidden;text-overflow:ellipsis">{{ c.email }}</span>
+          </span>
+          <span style="font-size:13px;text-align:right;flex:none">{{ c.at }}</span>
+        </div>
+      </sc-for>
+    </section>
+
+    <section style="display:flex;flex-direction:column;color:var(--color-neutral-700)">
+      <div style="display:flex;align-items:baseline;gap:10px;padding-bottom:8px;border-bottom:2px solid var(--color-divider)">
+        <h2 style="font-size:20px;margin:0;letter-spacing:-0.015em">Expired</h2>
+        <span style="font-size:14px">never opened</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--color-divider);font-size:14px">
+        <span style="flex:1;text-decoration:line-through">…/join/••••••••Hn3e</span>
+        <span>expired Mon 21 Sep</span>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844}}">
+class Component extends DCLogic {
+  state = { dur: "1 day", invites: [
+    { token: "b2Lx9QeK7fz", made: "today 17:05", expires: "in 23 h" },
+    { token: "Wm4pR8tYs2c", made: "yesterday", expires: "in 5 days" },
+  ], revealed: {}, copied: null, fresh: null };
+  componentWillUnmount() { clearTimeout(this.t); clearTimeout(this.f); }
+  renderVals() {
+    const { dur, invites, revealed, copied, fresh } = this.state;
+    const opts = ["1 hour", "1 day", "7 days"];
+    return {
+      durations: opts.map((o, i) => ({ label: o, on: dur === o, pick: () => this.setState({ dur: o }),
+        bg: dur === o ? "var(--color-text)" : "transparent", fg: dur === o ? "var(--color-bg)" : "var(--color-text)",
+        sep: i ? "2px solid var(--color-text)" : "0" })),
+      create: () => {
+        const token = Math.random().toString(36).slice(2, 13);
+        this.setState((s) => ({ fresh: token, invites: [{ token, made: "just now", expires: s.dur === "1 hour" ? "in 1 h" : s.dur === "1 day" ? "in 24 h" : "in 7 days" }, ...s.invites] }));
+        clearTimeout(this.f); this.f = setTimeout(() => this.setState({ fresh: null }), 1400);
+      },
+      openCount: invites.length,
+      open: invites.map((inv) => {
+        const r = !!revealed[inv.token], c = copied === inv.token;
+        return { ...inv,
+          shown: r ? `dropwatcher.in/join/${inv.token}` : `dropwatcher.in/join/••••••••${inv.token.slice(-4)}`,
+          revealLabel: r ? "Hide link" : "Show link",
+          toggleReveal: () => this.setState((s) => ({ revealed: { ...s.revealed, [inv.token]: !s.revealed[inv.token] } })),
+          copyLabel: c ? "Copied" : "Copy link", copyBg: c ? "var(--color-text)" : "transparent", copyFg: c ? "var(--color-bg)" : "var(--color-text)",
+          copy: () => { navigator.clipboard?.writeText(`https://dropwatcher.in/join/${inv.token}`).catch(() => {}); this.setState({ copied: inv.token }); clearTimeout(this.t); this.t = setTimeout(() => this.setState({ copied: null }), 1800); },
+          flash: fresh === inv.token ? "var(--color-accent-100)" : "transparent",
+        };
+      }),
+      claimed: [
+        { initial: "M", name: "Meera", email: "meera.k@gmail.com", at: "Tue 22 Sep\n21:14" },
+        { initial: "A", name: "Arjun", email: "arjun.r@outlook.com", at: "Sun 20 Sep" },
+        { initial: "S", name: "Sneha", email: "sneha@proton.me", at: "Fri 18 Sep" },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="stylesheet" href="_ds/modernist-a03dd507-7fba-4621-8383-88587a1c3fc7/styles.css">
+  <script src="_ds/modernist-a03dd507-7fba-4621-8383-88587a1c3fc7/_ds_bundle.js"></script>
+  <style>body{margin:0;background:var(--color-neutral-200)} a{color:var(--color-accent-700)} a:hover{color:var(--color-accent-800)}</style>
+</helmet>
+<section id="turn-1" style="display:flex;flex-direction:column;gap:56px;padding:48px;font-family:var(--font-body);color:var(--color-text);background:var(--color-neutral-200)">
+  <div style="display:flex;flex-direction:column;gap:10px;max-width:880px;padding-bottom:24px;border-bottom:2px solid var(--color-divider)">
+    <span style="font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-700)">Drop Watcher · UI design · round 1</span>
+    <h1 style="font-size:56px;margin:0;line-height:.95;letter-spacing:-0.045em">Every screen, every state.</h1>
+    <p style="margin:0;font-size:17px;line-height:1.5;max-width:720px;text-wrap:pretty">Each watch state owns a whole surface treatment, not a dot: <strong>waiting</strong> is a quiet grey card with a clean-read line, <strong>on sale</strong> is a solid red field with the Book button on the card itself, <strong>can't read</strong> is black with hazard tape and minutes-blind in words, <strong>silenced</strong> is an empty outline, <strong>not checked yet</strong> is dashed. Frames are live: tap dates, cinemas, copy, silence, delete.</p>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:baseline;gap:14px"><h2 style="font-size:32px;margin:0;letter-spacing:-0.03em">0 · State vocabulary</h2><span style="font-size:15px;color:var(--color-neutral-700)">WatchCard, light and dark</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+      <div id="0a" style="display:flex;flex-direction:column;gap:12px;width:390px;padding:16px;background:var(--color-bg);border:2px solid #201e1d">
+        <span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">0a · Light</span>
+        <dc-import name="WatchCard" state="on_sale" hint-size="100%,150px"></dc-import>
+        <dc-import name="WatchCard" state="cant_read" title="Devara: Part 2 — premiere" weekday="Wed" day="30" hint-size="100%,170px"></dc-import>
+        <dc-import name="WatchCard" state="waiting" weekday="Sun" day="27" hint-size="100%,120px"></dc-import>
+        <dc-import name="WatchCard" state="new" title="Kantara: Chapter 2" city="Bengaluru" weekday="Fri" day="2" month="Oct" hint-size="100%,100px"></dc-import>
+        <dc-import name="WatchCard" state="silenced" title="Coolie" city="Chennai" weekday="Fri" day="25" hint-size="100%,90px"></dc-import>
+      </div>
+      <div id="0b" style="display:flex;flex-direction:column;gap:12px;width:390px;padding:16px;border:2px solid #201e1d;--color-bg:#171514;--color-surface:#262322;--color-text:#f1efee;--color-divider:rgba(241,239,238,.32);--color-neutral-100:#2d2b2b;--color-neutral-200:#2d2b2b;--color-neutral-300:#444141;--color-neutral-400:#605d5d;--color-neutral-500:#7d7979;--color-neutral-600:#9b9797;--color-neutral-700:#bab6b6;--color-neutral-800:#d7d3d3;--color-neutral-900:#eae7e7;--color-accent-100:#4d170e;--color-accent-300:#7c1405;--color-accent-700:#ff9783;--color-accent-800:#ffc4b8;--color-accent-900:#ffe0d9;background:var(--color-bg);color:var(--color-text)">
+        <span style="align-self:flex-start;padding:2px 8px;background:#f3f2f2;color:#201e1d;font-size:12px;font-weight:800">0b · Dark</span>
+        <dc-import name="WatchCard" state="on_sale" hint-size="100%,150px"></dc-import>
+        <dc-import name="WatchCard" state="cant_read" title="Devara: Part 2 — premiere" weekday="Wed" day="30" hint-size="100%,170px"></dc-import>
+        <dc-import name="WatchCard" state="waiting" weekday="Sun" day="27" hint-size="100%,120px"></dc-import>
+        <dc-import name="WatchCard" state="new" title="Kantara: Chapter 2" city="Bengaluru" weekday="Fri" day="2" month="Oct" hint-size="100%,100px"></dc-import>
+        <dc-import name="WatchCard" state="silenced" title="Coolie" city="Chennai" weekday="Fri" day="25" hint-size="100%,90px"></dc-import>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:baseline;gap:14px"><h2 style="font-size:32px;margin:0;letter-spacing:-0.03em">1 · Join</h2><span style="font-size:15px;color:var(--color-neutral-700)">/join/[token]</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+      <div id="1a" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">1a · Valid invite</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Join" variant="valid" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="1b" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">1b · Already claimed</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Join" variant="claimed" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="1c" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">1c · Expired</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Join" variant="expired" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="1d" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">1d · Not a real link</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Join" variant="invalid" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:baseline;gap:14px"><h2 style="font-size:32px;margin:0;letter-spacing:-0.03em">2 · My watches</h2><span style="font-size:15px;color:var(--color-neutral-700)">/ · page-level health banner answers "is silence real?" before any card</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+      <div id="2a" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">2a · Returning, reading fine</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Home" variant="returning" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="2b" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">2b · Blind: BookMyShow blocking</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Home" variant="blind" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="2c" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">2c · New member, empty</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Home" variant="new" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="2d" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">2d · Returning, dark</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;--color-bg:#171514;--color-surface:#262322;--color-text:#f1efee;--color-divider:rgba(241,239,238,.32);--color-neutral-100:#2d2b2b;--color-neutral-200:#2d2b2b;--color-neutral-300:#444141;--color-neutral-400:#605d5d;--color-neutral-500:#7d7979;--color-neutral-600:#9b9797;--color-neutral-700:#bab6b6;--color-neutral-800:#d7d3d3;--color-neutral-900:#eae7e7;--color-accent-100:#4d170e;--color-accent-300:#7c1405;--color-accent-700:#ff9783;--color-accent-800:#ffc4b8;--color-accent-900:#ffe0d9;background:var(--color-bg)"><dc-import name="Home" variant="returning" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+    </div>
+    <div id="2e" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">2e · Wide screen, blind</span><div style="width:1280px;height:800px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Home" variant="blind" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:baseline;gap:14px"><h2 style="font-size:32px;margin:0;letter-spacing:-0.03em">3 · Add a watch</h2><span style="font-size:15px;color:var(--color-neutral-700)">/new · type in the field on 3a to see it classify live</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+      <div id="3a" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">3a · Step 1, empty</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="AddWatch" variant="paste" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="3b" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">3b · Film page pasted</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="AddWatch" variant="film" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="3c" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">3c · Not BookMyShow</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="AddWatch" variant="rejected" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="3d" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">3d · Showtimes link, good</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="AddWatch" variant="good" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+      <div id="3e" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">3e · Step 2, friends already watching</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="AddWatch" variant="confirm" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="3f" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">3f · Step 2, city not known yet</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="AddWatch" variant="unknown_city" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="3g" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">3g · Step 2, date already yours</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="AddWatch" variant="duplicate" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:baseline;gap:14px"><h2 style="font-size:32px;margin:0;letter-spacing:-0.03em">4 · Watch detail</h2><span style="font-size:15px;color:var(--color-neutral-700)">/w/[id] · the last-12-checks strip lets anyone answer "is this working?"</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+      <div id="4a" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">4a · Waiting</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="WatchDetail" variant="waiting" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="4b" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">4b · On sale</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="WatchDetail" variant="on_sale" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="4c" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">4c · Can't read</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="WatchDetail" variant="cant_read" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="4d" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">4d · Silenced</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="WatchDetail" variant="silenced" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+      <div id="4e" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">4e · Not checked yet</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="WatchDetail" variant="new" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="4f" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">4f · Can't read, dark</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;--color-bg:#171514;--color-surface:#262322;--color-text:#f1efee;--color-divider:rgba(241,239,238,.32);--color-neutral-100:#2d2b2b;--color-neutral-200:#2d2b2b;--color-neutral-300:#444141;--color-neutral-400:#605d5d;--color-neutral-500:#7d7979;--color-neutral-600:#9b9797;--color-neutral-700:#bab6b6;--color-neutral-800:#d7d3d3;--color-neutral-900:#eae7e7;--color-accent-100:#4d170e;--color-accent-300:#7c1405;--color-accent-700:#ff9783;--color-accent-800:#ffc4b8;--color-accent-900:#ffe0d9;background:var(--color-bg)"><dc-import name="WatchDetail" variant="cant_read" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="4g" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">4g · On sale, dark</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;--color-bg:#171514;--color-surface:#262322;--color-text:#f1efee;--color-divider:rgba(241,239,238,.32);--color-neutral-100:#2d2b2b;--color-neutral-200:#2d2b2b;--color-neutral-300:#444141;--color-neutral-400:#605d5d;--color-neutral-500:#7d7979;--color-neutral-600:#9b9797;--color-neutral-700:#bab6b6;--color-neutral-800:#d7d3d3;--color-neutral-900:#eae7e7;--color-accent-100:#4d170e;--color-accent-300:#7c1405;--color-accent-700:#ff9783;--color-accent-800:#ffc4b8;--color-accent-900:#ffe0d9;background:var(--color-bg)"><dc-import name="WatchDetail" variant="on_sale" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+    </div>
+    <div id="4h" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">4h · Wide screen, on sale</span><div style="width:1280px;height:800px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="WatchDetail" variant="on_sale" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:baseline;gap:14px"><h2 style="font-size:32px;margin:0;letter-spacing:-0.03em">5 · Silenced / Undo</h2><span style="font-size:15px;color:var(--color-neutral-700)">/s/[id]/ack · reached from the notification button</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+      <div id="5a" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">5a · Just silenced</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Silenced" variant="just" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="5b" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">5b · Already silenced</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Silenced" variant="already" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="5c" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">5c · Not signed in here</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Silenced" variant="signedout" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:baseline;gap:14px"><h2 style="font-size:32px;margin:0;letter-spacing:-0.03em">6 · Add a device</h2><span style="font-size:15px;color:var(--color-neutral-700)">/devices/new and the link it makes · the countdown is live</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+      <div id="6a" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">6a · Signed-in phone, showing QR</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Devices" variant="pair" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="6b" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">6b · New device, confirm</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Devices" variant="confirm" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="6c" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">6c · Link expired</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Devices" variant="expired" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+      <div id="6d" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">6d · Link already used</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="Devices" variant="used" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:baseline;gap:14px"><h2 style="font-size:32px;margin:0;letter-spacing:-0.03em">7 · Admin: invites</h2><span style="font-size:15px;color:var(--color-neutral-700)">/admin/invites · owner only, never linked for anyone else</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+      <div id="7a" style="display:flex;flex-direction:column;gap:10px"><span style="align-self:flex-start;padding:2px 8px;background:#201e1d;color:#f3f2f2;font-size:12px;font-weight:800">7a · Invites, links masked until revealed</span><div style="width:390px;height:844px;overflow:auto;border:2px solid #201e1d;background:var(--color-bg)"><dc-import name="AdminInvites" style="height:100%" hint-size="100%,100%"></dc-import></div></div>
+    </div>
+  </div>
+</section>
+</x-dc>
+</body>
+</html>

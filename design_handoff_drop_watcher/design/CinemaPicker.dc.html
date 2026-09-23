@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/modernist-a03dd507-7fba-4621-8383-88587a1c3fc7/styles.css">
+  <script src="_ds/modernist-a03dd507-7fba-4621-8383-88587a1c3fc7/_ds_bundle.js"></script>
+</helmet>
+<div style="display:flex;flex-direction:column;border-top:2px solid var(--color-divider);border-bottom:2px solid var(--color-divider)">
+  <button onClick="{{ toggleOpen }}" aria-expanded="{{ open }}" style="display:flex;align-items:center;gap:12px;padding:14px 0;min-height:56px;background:none;border:0;font:inherit;color:var(--color-text);cursor:pointer;text-align:left">
+    <span style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+      <span style="font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-700)">Cinemas and screens · optional</span>
+      <span style="font-size:16px;font-weight:800">{{ summary }}</span>
+    </span>
+    <span style="display:inline-flex;transition:transform .2s;transform:rotate({{ chevronDeg }}deg)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"></path></svg>
+    </span>
+  </button>
+  <div style="display:flex;align-items:flex-start;gap:8px;padding:0 0 14px;font-size:14px;line-height:1.45">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex:none;margin-top:2px;color:var(--color-accent-700)"><path d="M20 6 9 17l-5-5"></path></svg>
+    <span style="text-wrap:pretty">{{ armedLine }}</span>
+  </div>
+  <div style="display:grid;grid-template-rows:{{ gridRows }};transition:grid-template-rows .22s ease">
+    <div style="overflow:hidden;min-height:0">
+      <sc-if value="{{ known }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:14px;padding-bottom:16px">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:12px;color:var(--color-neutral-700)">Screen format</span>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <sc-for list="{{ screenOpts }}" as="s" hint-placeholder-count="4">
+                <button onClick="{{ s.pick }}" aria-pressed="{{ s.on }}" style="min-height:40px;padding:0 14px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;border:2px solid {{ s.border }};background:{{ s.bg }};color:{{ s.fg }};transition:background .12s">{{ s.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column">
+            <span style="font-size:12px;color:var(--color-neutral-700);padding-bottom:6px">Cinemas we've seen in {{ city }}. Formats are what we've spotted there before, not a promise for your date.</span>
+            <sc-for list="{{ rows }}" as="c" hint-placeholder-count="4">
+              <button onClick="{{ c.toggle }}" aria-pressed="{{ c.on }}" style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;min-height:56px;background:none;border:0;border-top:1px solid var(--color-divider);font:inherit;color:var(--color-text);cursor:pointer;text-align:left">
+                <span style="flex:none;width:22px;height:22px;display:grid;place-items:center;border:2px solid {{ c.boxBorder }};background:{{ c.boxBg }};color:#fff;margin-top:1px;transition:background .12s">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" style="opacity:{{ c.tickOpacity }}"><path d="M20 6 9 17l-5-5"></path></svg>
+                </span>
+                <span style="display:flex;flex-direction:column;gap:6px;min-width:0">
+                  <span style="font-size:15px;font-weight:600">{{ c.name }}</span>
+                  <span style="display:flex;flex-wrap:wrap;gap:4px">
+                    <sc-for list="{{ c.screens }}" as="sc" hint-placeholder-count="2">
+                      <span class="tag tag-neutral" style="padding:2px 8px">{{ sc }}</span>
+                    </sc-for>
+                  </span>
+                </span>
+              </button>
+            </sc-for>
+          </div>
+          <sc-if value="{{ anySelected }}" hint-placeholder-val="{{ false }}">
+            <button class="btn btn-ghost" onClick="{{ clear }}" style="align-self:flex-start;min-height:44px">Back to any cinema</button>
+          </sc-if>
+        </div>
+      </sc-if>
+      <sc-if value="{{ unknown }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:0 0 16px;font-size:14px;line-height:1.5;color:var(--color-neutral-800);text-wrap:pretty">We haven't seen {{ city }}'s cinemas yet, so there's nothing to pick from. That's fine: your watch covers every cinema, and once shows appear you can narrow it from the watch's page.</div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:600},&quot;city&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Hyderabad&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;known&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;startOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;cinemas&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;Cinema[]&quot;},&quot;selected&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string[]&quot;}}">
+class Component extends DCLogic {
+  state = { open: this.props.startOpen ?? false, sel: this.props.selected ?? [], screen: null };
+  renderVals() {
+    const city = this.props.city ?? "Hyderabad";
+    const known = this.props.known ?? true;
+    const cinemas = this.props.cinemas ?? [
+      { code: "AMB", name: "AMB Cinemas, Gachibowli", screens: ["Dolby Atmos", "4K"] },
+      { code: "PRSD", name: "Prasads Multiplex", screens: ["IMAX", "Dolby Atmos"] },
+      { code: "ALLU", name: "Allu Cinemas, Kokapet", screens: ["IMAX", "Dolby Atmos"] },
+      { code: "AAA", name: "AAA Cinemas, Ameerpet", screens: ["Dolby Atmos", "4DX"] },
+      { code: "PVRN", name: "PVR Nexus, Kukatpally", screens: ["Telugu 2D | ATMOS", "P[XL]"] },
+    ];
+    const { open, sel, screen } = this.state;
+    const accent = "var(--color-accent-600)";
+    const fmts = ["IMAX", "Dolby Atmos", "4DX"];
+    const screenOpts = [null, ...fmts].map((f) => {
+      const on = screen === f;
+      return { label: f ?? "Any screen", on, pick: () => this.setState({ screen: f }),
+        border: on ? accent : "var(--color-divider)", bg: on ? accent : "transparent", fg: on ? "#fff" : "var(--color-text)" };
+    });
+    const rows = cinemas.map((c) => {
+      const on = sel.includes(c.code);
+      return { ...c, on, toggle: () => this.setState((s) => ({ sel: on ? s.sel.filter((x) => x !== c.code) : [...s.sel, c.code] })),
+        boxBorder: on ? accent : "var(--color-neutral-600)", boxBg: on ? accent : "transparent", tickOpacity: on ? 1 : 0 };
+    });
+    const names = cinemas.filter((c) => sel.includes(c.code)).map((c) => c.name.split(",")[0]);
+    const scr = screen ? `${screen} screens` : "any screen";
+    const summary = !known ? "Any cinema" : sel.length === 0 ? (screen ? `Any cinema · ${screen}` : "Any cinema, any screen")
+      : `${names.length === 1 ? names[0] : names.length + " cinemas"} · ${screen ?? "any screen"}`;
+    const armedLine = sel.length === 0 && !screen
+      ? `Nothing picked means every cinema in ${city}. This watch is fully armed as it is.`
+      : sel.length === 0 ? `Any cinema in ${city}, ${scr} only.`
+      : `Only ${names.join(", ")}, ${scr}. Clear it to go back to every cinema.`;
+    return {
+      open: open, toggleOpen: () => this.setState((s) => ({ open: !s.open })),
+      chevronDeg: open ? 180 : 0, gridRows: open ? "1fr" : "0fr",
+      city, known, unknown: !known, screenOpts, rows, summary, armedLine,
+      anySelected: sel.length > 0 || !!screen, clear: () => this.setState({ sel: [], screen: null }),
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/modernist-a03dd507-7fba-4621-8383-88587a1c3fc7/styles.css">
+  <script src="_ds/modernist-a03dd507-7fba-4621-8383-88587a1c3fc7/_ds_bundle.js"></script>
+  <style>a{color:var(--color-accent-700)} a:hover{color:var(--color-accent-800)}</style>
+</helmet>
+<div style="min-height:100%;display:flex;flex-direction:column;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)">
+  <header style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:2px solid var(--color-divider)">
+    <span style="width:26px;height:26px;background:var(--color-accent);color:#fff;display:grid;place-items:center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"></path><path d="M13 5v2"></path><path d="M13 17v2"></path><path d="M13 11v2"></path></svg>
+    </span>
+    <span style="font-weight:800;font-size:17px;letter-spacing:-0.02em">Drop Watcher</span>
+  </header>
+
+  <sc-if value="{{ isSilencedView }}" hint-placeholder-val="{{ true }}">
+    <main style="flex:1;width:100%;max-width:640px;margin:0 auto;padding:48px 16px 24px;display:flex;flex-direction:column;gap:18px">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M17 17H4a1 1 0 0 1-.74-1.673C4.59 13.956 6 12.499 6 8a6 6 0 0 1 .258-1.742"></path><path d="m2 2 20 20"></path><path d="M8.668 3.01A6 6 0 0 1 18 8c0 2.687.77 4.653 1.707 6.05"></path></svg>
+      <h1 style="font-size:64px;margin:0;line-height:.92;letter-spacing:-0.05em">{{ headline }}</h1>
+      <div style="display:flex;flex-direction:column;gap:2px;padding:14px 0;border-top:2px solid var(--color-text);border-bottom:2px solid var(--color-divider)">
+        <span style="font-size:20px;font-weight:800;letter-spacing:-0.015em">Avengers: Endgame Encore</span>
+        <span style="font-size:15px">Sat 26 Sep · Hyderabad</span>
+      </div>
+      <p style="margin:0;font-size:17px;line-height:1.5;text-wrap:pretty">{{ body }}</p>
+    </main>
+    <div style="position:sticky;bottom:0;background:var(--color-bg)">
+      <div style="max-width:640px;margin:0 auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:8px">
+        <button onClick="{{ undo }}" style="display:flex;align-items:center;justify-content:space-between;width:100%;min-height:64px;padding:0 20px;background:var(--color-text);color:var(--color-bg);border:0;font:inherit;font-weight:800;font-size:20px;cursor:pointer;transition:transform .08s" style-active="transform:scale(.98)">
+          <span>{{ undoLabel }}</span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"></path></svg>
+        </button>
+        <a href="#" class="btn btn-ghost" style="min-height:48px;justify-content:flex-start;font-size:15px;color:var(--color-text)">See all your watches</a>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isRestored }}" hint-placeholder-val="{{ false }}">
+    <main style="flex:1;width:100%;max-width:640px;margin:0 auto;padding:48px 16px 24px;display:flex;flex-direction:column;gap:18px">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-accent)"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg>
+      <h1 style="font-size:64px;margin:0;line-height:.92;letter-spacing:-0.05em">Alerts back on.</h1>
+      <div style="display:flex;flex-direction:column;gap:2px;padding:14px 0;border-top:2px solid var(--color-text);border-bottom:2px solid var(--color-divider)">
+        <span style="font-size:20px;font-weight:800;letter-spacing:-0.015em">Avengers: Endgame Encore</span>
+        <span style="font-size:15px">Sat 26 Sep · Hyderabad</span>
+      </div>
+      <p style="margin:0;font-size:17px;line-height:1.5;text-wrap:pretty">You'll hear from us again for this date.</p>
+    </main>
+    <div style="position:sticky;bottom:0;background:var(--color-bg)">
+      <div style="max-width:640px;margin:0 auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:8px">
+        <button onClick="{{ resilence }}" class="btn btn-secondary" style="width:100%;min-height:56px;justify-content:flex-start;font-size:17px;color:var(--color-text);border-width:2px">Silence it again</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isSignedOut }}" hint-placeholder-val="{{ false }}">
+    <main style="flex:1;width:100%;max-width:640px;margin:0 auto;padding:48px 16px 24px;display:flex;flex-direction:column;gap:18px">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect><path d="M12 18h.01"></path></svg>
+      <h1 style="font-size:48px;margin:0;line-height:.95;letter-spacing:-0.045em;text-wrap:pretty">This phone isn't signed in.</h1>
+      <p style="margin:0;font-size:17px;line-height:1.5;text-wrap:pretty">So nothing was silenced, and your alerts for this date are still on. Pair this phone from one that's signed in, then tap the notification again.</p>
+    </main>
+    <div style="position:sticky;bottom:0;background:var(--color-bg)">
+      <div style="max-width:640px;margin:0 auto;padding:12px 16px 20px">
+        <a href="#" class="btn btn-primary" style="width:100%;min-height:56px;justify-content:space-between;font-size:17px;padding:0 18px">
+          <span>How to pair this phone</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+        </a>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;just&quot;,&quot;already&quot;,&quot;signedout&quot;],&quot;default&quot;:&quot;just&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { restored: false };
+  renderVals() {
+    const v = this.props.variant ?? "just";
+    const { restored } = this.state;
+    const already = v === "already";
+    return {
+      isSilencedView: v !== "signedout" && !restored, isRestored: v !== "signedout" && restored, isSignedOut: v === "signedout",
+      headline: already ? "Already silenced." : "Silenced.",
+      body: already ? "You'd already told us to stop for this date. Nothing changed." : "No more alerts for this date. Only yours: friends watching it still get theirs.",
+      undoLabel: already ? "Watch again" : "Undo",
+      undo: () => this.setState({ restored: true }), resilence: () => this.setState({ restored: false }),
+    };
+  }
+}
+</script>
+</body>
+</html>

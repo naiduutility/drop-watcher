@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/modernist-a03dd507-7fba-4621-8383-88587a1c3fc7/styles.css">
+  <script src="_ds/modernist-a03dd507-7fba-4621-8383-88587a1c3fc7/_ds_bundle.js"></script>
+  <style>@keyframes dwspin{to{transform:rotate(360deg)}} a{color:var(--color-accent-700)} a:hover{color:var(--color-accent-800)}</style>
+</helmet>
+<div style="min-height:100%;display:flex;flex-direction:column;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)">
+  <header style="display:flex;align-items:center;gap:8px;padding:6px 16px 6px 4px;border-bottom:2px solid var(--color-divider);background:var(--color-bg);position:sticky;top:0;z-index:3">
+    <a href="#" aria-label="Back" style="display:grid;place-items:center;width:44px;height:44px;color:var(--color-text)">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+    </a>
+    <span style="font-weight:800;font-size:17px;margin-right:auto;letter-spacing:-0.015em">Add a watch</span>
+    <span style="display:flex;gap:4px;align-items:center">
+      <span style="width:24px;height:4px;background:var(--color-accent)"></span>
+      <span style="width:24px;height:4px;background:{{ step2Bar }}"></span>
+    </span>
+    <span style="font-size:13px;font-weight:600;color:var(--color-neutral-700)">{{ stepLabel }}</span>
+  </header>
+
+  <sc-if value="{{ isStep1 }}" hint-placeholder-val="{{ true }}">
+    <main style="flex:1;width:100%;max-width:720px;margin:0 auto;padding:20px 16px 24px;display:flex;flex-direction:column;gap:20px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <h1 style="font-size:32px;margin:0;line-height:1.05;letter-spacing:-0.03em">Paste a showtimes link</h1>
+        <p style="margin:0;font-size:15px;color:var(--color-neutral-800);text-wrap:pretty">The address of a BookMyShow page where you pick a cinema and a time.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label for="dw-url" style="font-size:12px;color:var(--color-neutral-700)">BookMyShow link</label>
+        <div style="display:flex;border:2px solid {{ inputBorder }};background:var(--color-surface);transition:border-color .15s">
+          <input id="dw-url" type="url" inputmode="url" value="{{ url }}" onChange="{{ onUrl }}" placeholder="https://in.bookmyshow.com/…/buytickets/…" style="flex:1;min-width:0;min-height:52px;padding:0 12px;border:0;background:transparent;font:inherit;font-size:16px;color:var(--color-text);outline:none">
+          <button onClick="{{ paste }}" style="flex:none;display:flex;align-items:center;gap:6px;padding:0 14px;border:0;border-left:2px solid var(--color-divider);background:transparent;font:inherit;font-weight:800;font-size:14px;color:var(--color-text);cursor:pointer" style-hover="background:var(--color-neutral-300)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 2H9a1 1 0 0 0-1 1v2c0 .6.4 1 1 1h6c.6 0 1-.4 1-1V3c0-.6-.4-1-1-1Z"></path><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2M16 4h2a2 2 0 0 1 2 2v2M11 14h10"></path><path d="m17 10 4 4-4 4"></path></svg>
+            Paste
+          </button>
+        </div>
+        <sc-if value="{{ isGood }}" hint-placeholder-val="{{ false }}">
+          <span style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"></path></svg>
+            That's a showtimes link. Good to go.
+          </span>
+        </sc-if>
+        <sc-if value="{{ isRejected }}" hint-placeholder-val="{{ false }}">
+          <span style="display:flex;align-items:flex-start;gap:6px;font-size:14px;font-weight:600;color:var(--color-accent-700)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex:none;margin-top:2px"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+            That isn't a BookMyShow link. Copy it from the BookMyShow app or site, then paste it here.
+          </span>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{ isFilm }}" hint-placeholder-val="{{ false }}">
+        <section style="display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--color-accent-100);color:var(--color-accent-900)">
+          <span style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase">Nearly · one more step</span>
+          <span style="font-size:22px;font-weight:800;line-height:1.15;letter-spacing:-0.02em;text-wrap:pretty">That's the film's page. We need the page after it.</span>
+          <p style="margin:0;font-size:15px;line-height:1.5;text-wrap:pretty">The film page doesn't say which booking to watch, and a guess gives you a watch that never fires. The showtimes page does.</p>
+          <ol style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;border-top:2px solid var(--color-accent-300)">
+            <li style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--color-accent-300);font-size:15px"><span style="font-weight:800;width:16px">1</span><span>Open the film on BookMyShow</span></li>
+            <li style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--color-accent-300);font-size:15px"><span style="font-weight:800;width:16px">2</span><span>Tap <strong>Book tickets</strong></span></li>
+            <li style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--color-accent-300);font-size:15px"><span style="font-weight:800;width:16px">3</span><span>Pick any date. It doesn't matter which</span></li>
+            <li style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--color-accent-300);font-size:15px"><span style="font-weight:800;width:16px">4</span><span>Copy the address bar and paste it here</span></li>
+          </ol>
+        </section>
+      </sc-if>
+
+      <section style="display:flex;flex-direction:column;gap:14px;padding-top:16px;border-top:2px solid var(--color-divider)">
+        <span style="font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-700)">Where the link comes from</span>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="aspect-ratio:3/4;border:2px solid var(--color-text);background:var(--color-surface);display:flex;flex-direction:column;gap:5px;padding:8px">
+              <span style="height:6px;width:70%;background:var(--color-neutral-500)"></span>
+              <span style="height:4px;width:45%;background:var(--color-neutral-400)"></span>
+              <span style="flex:1"></span>
+              <span style="height:22px;background:var(--color-accent);color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;padding:0 5px;outline:2px solid var(--color-text);outline-offset:2px">Book tickets</span>
+            </div>
+            <span style="font-size:12px;line-height:1.3"><strong>1.</strong> Film page. Tap Book tickets</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="aspect-ratio:3/4;border:2px solid var(--color-text);background:var(--color-surface);display:flex;flex-direction:column;gap:6px;padding:8px">
+              <span style="display:grid;grid-template-columns:repeat(4,1fr);gap:3px">
+                <span style="height:18px;border:1px solid var(--color-neutral-500)"></span>
+                <span style="height:18px;background:var(--color-accent);outline:2px solid var(--color-text);outline-offset:1px"></span>
+                <span style="height:18px;border:1px solid var(--color-neutral-500)"></span>
+                <span style="height:18px;border:1px solid var(--color-neutral-500)"></span>
+              </span>
+              <span style="height:10px;background:var(--color-neutral-300)"></span>
+              <span style="height:10px;background:var(--color-neutral-300)"></span>
+              <span style="height:10px;background:var(--color-neutral-300)"></span>
+            </div>
+            <span style="font-size:12px;line-height:1.3"><strong>2.</strong> Pick any date</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="aspect-ratio:3/4;border:2px solid var(--color-text);background:var(--color-surface);display:flex;flex-direction:column;gap:6px;padding:8px">
+              <span style="height:18px;background:var(--color-bg);border:2px solid var(--color-accent);font-size:8px;font-weight:800;display:flex;align-items:center;padding:0 4px;overflow:hidden;white-space:nowrap">…/buytickets/…</span>
+              <span style="height:10px;background:var(--color-neutral-300)"></span>
+              <span style="height:10px;background:var(--color-neutral-300)"></span>
+            </div>
+            <span style="font-size:12px;line-height:1.3"><strong>3.</strong> Copy the address bar</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"></path></svg>
+              This one works
+            </span>
+            <span style="padding:10px;background:var(--color-surface);font-size:13px;line-height:1.4;overflow-wrap:anywhere">in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/<mark style="background:var(--color-accent);color:#fff;font-weight:800;padding:1px 2px">buytickets</mark>/ET00516728/20260926</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:var(--color-neutral-700)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+              This one doesn't (film page)
+            </span>
+            <span style="padding:10px;border:1px dashed var(--color-divider);font-size:13px;line-height:1.4;color:var(--color-neutral-700);overflow-wrap:anywhere">in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/ET00514163</span>
+          </div>
+        </div>
+      </section>
+    </main>
+    <div style="position:sticky;bottom:0;z-index:2;background:var(--color-bg);border-top:2px solid var(--color-divider)">
+      <div style="max-width:720px;margin:0 auto;padding:12px 16px">
+        <button class="btn btn-primary" onClick="{{ next }}" disabled="{{ cantContinue }}" style="width:100%;min-height:54px;justify-content:space-between;font-size:17px;padding:0 16px">
+          <span>Continue</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+        </button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isStep2 }}" hint-placeholder-val="{{ false }}">
+    <main style="flex:1;width:100%;max-width:720px;margin:0 auto;padding:20px 16px 24px;display:flex;flex-direction:column;gap:24px">
+      <section style="display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-700)">We found</span>
+        <span style="font-size:34px;font-weight:800;line-height:1.02;letter-spacing:-0.035em;text-wrap:pretty">{{ film }}</span>
+        <span style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+          <span class="tag tag-neutral" style="font-size:13px;padding:4px 10px;display:flex;gap:4px;align-items:center">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg>
+            {{ city }}
+          </span>
+          <span class="tag tag-neutral" style="font-size:13px;padding:4px 10px">{{ language }}</span>
+        </span>
+      </section>
+
+      <sc-if value="{{ hasFriends }}" hint-placeholder-val="{{ false }}">
+        <section style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--color-text);color:var(--color-bg)">
+          <span style="display:flex;flex:none">
+            <span style="width:36px;height:36px;display:grid;place-items:center;background:var(--color-accent);color:#fff;font-weight:800;font-size:15px;border:2px solid var(--color-text)">M</span>
+            <span style="width:36px;height:36px;display:grid;place-items:center;background:var(--color-bg);color:var(--color-text);font-weight:800;font-size:15px;border:2px solid var(--color-text);margin-left:-8px">A</span>
+          </span>
+          <span style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:17px;font-weight:800;line-height:1.2;text-wrap:pretty">Meera and Arjun are watching this. You'll join them.</span>
+            <span style="font-size:13px;opacity:.8">On Sat 26 and Wed 30. Your alerts stay your own.</span>
+          </span>
+        </section>
+      </sc-if>
+
+      <section style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <h2 style="font-size:22px;margin:0;letter-spacing:-0.02em">Which dates?</h2>
+          <p style="margin:0;font-size:14px;color:var(--color-neutral-800);text-wrap:pretty">Pick as many as you like. Dates with nothing on sale yet are the whole point: that's where a premiere appears.</p>
+        </div>
+        <div style="display:flex;gap:16px;font-size:12px;color:var(--color-neutral-800)">
+          <span style="display:flex;align-items:center;gap:5px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"></path></svg>
+            On sale
+          </span>
+          <span style="display:flex;align-items:center;gap:5px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 22h14"></path><path d="M5 2h14"></path><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path></svg>
+            Not yet
+          </span>
+          <sc-if value="{{ hasMine }}" hint-placeholder-val="{{ false }}">
+            <span style="display:flex;align-items:center;gap:5px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg>
+              Already yours
+            </span>
+          </sc-if>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px">
+          <sc-for list="{{ dates }}" as="d" hint-placeholder-count="14">
+            <button onClick="{{ d.toggle }}" aria-pressed="{{ d.on }}" aria-label="{{ d.aria }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:6px 5px;min-height:70px;font:inherit;cursor:pointer;text-align:left;border:2px {{ d.borderStyle }} {{ d.border }};background:{{ d.bg }};color:{{ d.fg }};transition:background .12s,color .12s,transform .08s" style-active="transform:scale(.95)">
+              <span style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase">{{ d.wd }}</span>
+              <span style="font-size:20px;font-weight:800;line-height:1;letter-spacing:-0.03em">{{ d.day }}</span>
+              <span style="flex:1"></span>
+              <sc-if value="{{ d.onSale }}" hint-placeholder-val="{{ false }}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"></path></svg>
+              </sc-if>
+              <sc-if value="{{ d.notYet }}" hint-placeholder-val="{{ true }}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 22h14"></path><path d="M5 2h14"></path><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path></svg>
+              </sc-if>
+              <sc-if value="{{ d.mine }}" hint-placeholder-val="{{ false }}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg>
+              </sc-if>
+            </button>
+          </sc-for>
+        </div>
+        <sc-if value="{{ showDup }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:2px solid var(--color-text)">
+            <span style="flex:1;font-size:14px;line-height:1.4;text-wrap:pretty">You already watch <strong>{{ dupLabel }}</strong> for this film. One watch per date.</span>
+            <a href="#" class="btn btn-secondary" style="min-height:44px;flex:none;color:var(--color-text)">Open it</a>
+          </div>
+        </sc-if>
+        <div style="display:flex;flex-direction:column;border-top:1px solid var(--color-divider)">
+          <sc-for list="{{ picked }}" as="p" hint-placeholder-count="2">
+            <div style="display:flex;align-items:baseline;gap:10px;padding:9px 0;border-bottom:1px solid var(--color-divider);font-size:14px">
+              <strong style="flex:none;min-width:92px">{{ p.label }}</strong>
+              <span style="color:var(--color-neutral-800)">{{ p.note }}</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noneSelected }}" hint-placeholder-val="{{ false }}">
+            <span style="padding:9px 0;font-size:14px;color:var(--color-neutral-700)">No dates picked yet.</span>
+          </sc-if>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:6px">
+        <label for="dw-name" style="font-size:12px;color:var(--color-neutral-700)">Name in your alerts</label>
+        <input id="dw-name" class="input" value="{{ name }}" onChange="{{ onName }}" style="min-height:52px;font-size:16px;border-width:2px">
+        <span style="font-size:13px;color:var(--color-neutral-700)">Your notification will read "{{ name }} is on sale".</span>
+      </section>
+
+      <dc-import name="CinemaPicker" city="{{ city }}" known="{{ cityKnown }}" hint-size="100%,110px"></dc-import>
+    </main>
+    <div style="position:sticky;bottom:0;z-index:2;background:var(--color-bg);border-top:2px solid var(--color-divider)">
+      <div style="max-width:720px;margin:0 auto;padding:10px 16px 12px;display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:12px;color:var(--color-neutral-700)">{{ footLine }}</span>
+        <button class="btn btn-primary" onClick="{{ submit }}" disabled="{{ noneSelected }}" style="width:100%;min-height:54px;justify-content:space-between;font-size:17px;padding:0 16px">
+          <span>{{ submitLabel }}</span>
+          <sc-if value="{{ submitting }}" hint-placeholder-val="{{ false }}">{{ spinner }}</sc-if>
+          <sc-if value="{{ notSubmitting }}" hint-placeholder-val="{{ true }}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg>
+          </sc-if>
+        </button>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;paste&quot;,&quot;good&quot;,&quot;film&quot;,&quot;rejected&quot;,&quot;confirm&quot;,&quot;unknown_city&quot;,&quot;duplicate&quot;],&quot;default&quot;:&quot;paste&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    const v = p.variant ?? "paste";
+    const urls = {
+      paste: "", good: "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/buytickets/ET00516728/20260926",
+      film: "https://in.bookmyshow.com/movies/hyderabad/avengers-endgame-encore/ET00514163",
+      rejected: "https://www.youtube.com/watch?v=TcMBFSGVi1c",
+    };
+    this.state = {
+      step: ["confirm", "unknown_city", "duplicate"].includes(v) ? 2 : 1,
+      url: urls[v] ?? "", sel: v === "duplicate" ? [] : v === "unknown_city" ? [] : ["20260930"],
+      name: v === "unknown_city" ? "Devara: Part 2" : "Avengers: Endgame Encore",
+      dup: v === "duplicate" ? "20260926" : null, submitting: false,
+    };
+  }
+  classify(u) {
+    if (!u.trim()) return "empty";
+    if (/bookmyshow\.com/i.test(u) && /\/buytickets\//i.test(u)) return "good";
+    if (/bookmyshow\.com\/.*movies/i.test(u)) return "film";
+    return "rejected";
+  }
+  renderVals() {
+    const v = this.props.variant ?? "paste";
+    const { step, url, sel, name, dup, submitting } = this.state;
+    const kind = this.classify(url);
+    const unknown = v === "unknown_city";
+    const city = unknown ? "Kakinada" : "Hyderabad";
+    const mine = v === "duplicate" ? ["20260926"] : [];
+    const wds = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const onSaleSet = unknown ? [] : ["20260923", "20260924", "20260925", "20260926", "20260927"];
+    const fmt = (d) => `${wds[d.getDay()]} ${d.getDate()} ${d.toLocaleString("en-IN", { month: "short" })}`;
+    const accent = "var(--color-accent-600)";
+    const dates = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(2026, 8, 23 + i);
+      const key = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+      const isMine = mine.includes(key), on = sel.includes(key), os = onSaleSet.includes(key);
+      dates.push({
+        key, wd: wds[d.getDay()], day: d.getDate(), label: fmt(d), on, onSale: os && !isMine, notYet: !os && !isMine, mine: isMine,
+        aria: `${fmt(d)}, ${isMine ? "already yours" : os ? "on sale" : "not on sale yet"}`,
+        bg: on ? accent : isMine ? "var(--color-neutral-200)" : "transparent",
+        fg: on ? "#fff" : isMine ? "var(--color-neutral-600)" : "var(--color-text)",
+        border: on ? accent : dup === key ? "var(--color-text)" : isMine ? "var(--color-neutral-400)" : "var(--color-divider)",
+        borderStyle: os || on || isMine ? "solid" : "dashed",
+        toggle: () => isMine ? this.setState({ dup: key }) : this.setState((s) => ({ dup: null, sel: on ? s.sel.filter((x) => x !== key) : [...s.sel, key].sort() })),
+      });
+    }
+    const picked = dates.filter((d) => d.on).map((d) => ({
+      label: d.label, note: d.onSale ? "On sale now. We'll alert you on the first check." : "Not on sale yet. We'll wait for it.",
+    }));
+    const n = picked.length;
+    return {
+      isStep1: step === 1, isStep2: step === 2, stepLabel: `Step ${step} of 2`,
+      step2Bar: step === 2 ? "var(--color-accent)" : "var(--color-neutral-300)",
+      url, onUrl: (e) => this.setState({ url: e.target.value }),
+      paste: async () => { try { const t = await navigator.clipboard.readText(); if (t) this.setState({ url: t }); } catch (e) {} },
+      isGood: kind === "good", isFilm: kind === "film", isRejected: kind === "rejected",
+      inputBorder: kind === "good" ? "var(--color-text)" : kind === "rejected" || kind === "film" ? "var(--color-accent-700)" : "var(--color-divider)",
+      cantContinue: kind !== "good", next: () => this.setState({ step: 2 }),
+      film: unknown ? "Devara: Part 2" : "Avengers: Endgame Encore", city, language: unknown ? "Telugu" : "English",
+      hasFriends: v === "confirm", cityKnown: !unknown,
+      dates, picked, noneSelected: n === 0, hasMine: mine.length > 0,
+      showDup: !!dup, dupLabel: dup ? dates.find((d) => d.key === dup)?.label : "",
+      name, onName: (e) => this.setState({ name: e.target.value }),
+      footLine: n === 0 ? "Pick at least one date" : `Any cinema in ${city} unless you narrow it · alerts go to your ntfy`,
+      submitLabel: submitting ? "Starting…" : n === 0 ? "Start watching" : `Start watching ${n} date${n > 1 ? "s" : ""}`,
+      submitting, notSubmitting: !submitting,
+      submit: () => { this.setState({ submitting: true }); setTimeout(() => this.setState({ submitting: false }), 1400); },
+      spinner: React.createElement("svg", { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.5, style: { animation: "dwspin 1s linear infinite" } }, React.createElement("path", { d: "M21 12a9 9 0 1 1-6.219-8.56" })),
+    };
+  }
+}
+</script>
+</body>
+</html>
