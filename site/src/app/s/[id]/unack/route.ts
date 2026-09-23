@@ -10,7 +10,7 @@
  * to watch this date again cannot sensibly leave some screens muted.
  */
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db } from "../../../../db/index.js";
 import { subscriptions } from "../../../../db/schema.js";
@@ -22,17 +22,28 @@ async function handle(req: Request, id: string) {
   const userId = await currentUserId();
   if (!userId) return Response.redirect(new URL("/", req.url), 303);
 
-  const keys = new URL(req.url).searchParams.getAll("k").map((k) => k.toLowerCase()).filter(Boolean);
+  const keys = new URL(req.url).searchParams.getAll("k")
+    .map((k) => k.toLowerCase())
+    .filter(Boolean);
 
   if (keys.length > 0) {
-    // Also drop them from notifiedKeys, so the next read announces the screen
-    // again rather than treating it as old news and staying silent forever.
+    // Read, filter in JS, write back. Drizzle interpolates a JS array as a
+    // record — "(a, b, c)" — which Postgres refuses to cast to text[], so
+    // doing this in SQL fails at runtime rather than at compile time.
+    const [row] = await db.select().from(subscriptions)
+      .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
+      .limit(1);
+    if (!row) return Response.redirect(new URL("/", req.url), 303);
+
+    const drop = new Set(keys);
     await db.update(subscriptions)
       .set({
-        ackedKeys: sql`array(select k from unnest(${subscriptions.ackedKeys}) k where k <> all(${keys}::text[]))`,
-        notifiedKeys: sql`array(select k from unnest(${subscriptions.notifiedKeys}) k where k <> all(${keys}::text[]))`,
+        ackedKeys: row.ackedKeys.filter((k) => !drop.has(k)),
+        // Also forgotten as "announced", so the next read treats the screen as
+        // news again rather than old business and stays silent forever.
+        notifiedKeys: row.notifiedKeys.filter((k) => !drop.has(k)),
       })
-      .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)));
+      .where(eq(subscriptions.id, id));
   } else {
     // Re-arming resets the whole lifecycle: a subscription left "fired" counts
     // as already told and would never alert again.

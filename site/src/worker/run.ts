@@ -161,20 +161,29 @@ async function deliver(
   return anyDelivered;
 }
 
-async function applyEvents(events: WatchEvent[], now: Date) {
+/**
+ * `known` maps subscription id -> the keys already announced.
+ *
+ * The union is computed in JavaScript rather than in SQL. An earlier version
+ * built `array(... || ${keys}::text[])`, and Drizzle interpolates a JS array
+ * as a record — "(a, b, c)" — which Postgres refuses to cast to text[]. The
+ * whole pass then died AFTER the alert had been delivered, so the person was
+ * told and the database never recorded it.
+ */
+async function applyEvents(
+  events: WatchEvent[], now: Date, known: Map<string, string[]>,
+) {
   for (const event of events) {
     if (event.kind === "on_sale") {
       // Append the keys just announced. Without this the same cinema would be
       // re-announced on every pass, and a second cinema opening later could
       // never be told apart from the first.
+      const merged = [...new Set([
+        ...(known.get(event.subscriptionId) ?? []),
+        ...event.targets.map((t) => t.key),
+      ])];
       await db.update(subscriptions)
-        .set({
-          state: "fired",
-          firedAt: now,
-          notifiedKeys: sql`array(select distinct unnest(${subscriptions.notifiedKeys} || ${
-            event.targets.map((t) => t.key)
-          }::text[]))`,
-        })
+        .set({ state: "fired", firedAt: now, notifiedKeys: merged })
         .where(eq(subscriptions.id, event.subscriptionId));
     } else if (event.kind === "reminder") {
       await db.update(subscriptions)
@@ -293,7 +302,7 @@ export async function runPass(now = new Date()): Promise<void> {
             }
           }
           // Only what actually reached somebody changes state.
-          await applyEvents(delivered, now);
+          await applyEvents(delivered, now, new Map(views.map((v) => [v.id, v.notifiedKeys])));
 
           // What was listed for THIS date, so the watch's own page can show
           // the cinemas rather than only a number.

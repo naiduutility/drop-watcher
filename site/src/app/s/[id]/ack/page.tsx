@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { BellOff, Smartphone, Undo2 } from "lucide-react";
 
 import { db } from "../../../../db/index.js";
@@ -84,10 +84,11 @@ export default async function Ack({
 
   if (!already) {
     if (keys.length > 0) {
+      // Merged in JS: Drizzle interpolates a JS array as a record, which
+      // Postgres will not cast to text[]. The row is already loaded, so there
+      // is nothing to gain from doing it in SQL.
       await db.update(subscriptions)
-        .set({
-          ackedKeys: sql`array(select distinct unnest(${subscriptions.ackedKeys} || ${keys}::text[]))`,
-        })
+        .set({ ackedKeys: [...new Set([...row.sub.ackedKeys, ...keys])] })
         .where(eq(subscriptions.id, params.id));
     } else {
       await db.update(subscriptions)
