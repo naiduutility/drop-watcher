@@ -150,6 +150,44 @@ export async function fetchViaBrowser(
   };
 }
 
+/** Attempts before a blocked read is accepted as the answer. */
+const ATTEMPTS = envNumber("BMS_ATTEMPTS", 3);
+/** Linear backoff between them. */
+const RETRY_DELAY_MS = envNumber("BMS_RETRY_DELAY_MS", 15_000);
+
+/**
+ * The browser, retried on a fresh context when Cloudflare refuses.
+ *
+ * BookMyShow challenges datacenter IPs INTERMITTENTLY — observed across four
+ * Actions runs, the same runner read the page cleanly and was refused 403 in
+ * consecutive passes, sometimes within one pass for two dates seconds apart.
+ * check.py learned this and retries inside the run; without it a transient
+ * block costs a whole cron interval, which on premiere night is the difference
+ * between being told and reading about it afterwards.
+ *
+ * Each attempt gets a brand-new context, so the cookies and fingerprint that
+ * were just flagged are not reused.
+ */
+async function browserWithRetries(
+  provider: ContextProvider, url: string, requestedDate: string | null,
+): Promise<FetchResult> {
+  let last: FetchResult | null = null;
+  for (let attempt = 1; attempt <= Math.max(1, ATTEMPTS); attempt++) {
+    const result = await fetchViaBrowser(provider, url, requestedDate);
+    if (result.reading.outcome !== Outcome.BLOCKED) return result;
+    last = result;
+    if (attempt < ATTEMPTS) {
+      const wait = RETRY_DELAY_MS * attempt;
+      console.log(
+        `   attempt ${attempt}/${ATTEMPTS} was blocked; retrying in ` +
+        `${Math.round(wait / 1000)}s on a fresh context`,
+      );
+      await sleep(wait);
+    }
+  }
+  return last!;
+}
+
 /**
  * Read one showtimes page as cheaply as it will allow.
  *
@@ -166,7 +204,7 @@ export async function fetchShowtimes(
   // to an IP BookMyShow is already unhappy with, spent to learn nothing.
   if (process.env.PREFER_BROWSER === "1" && provider) {
     try {
-      return await fetchViaBrowser(provider, url, requestedDate);
+      return await browserWithRetries(provider, url, requestedDate);
     } catch (e) {
       console.error(`   browser unavailable: ${(e instanceof Error ? e.message : String(e)).slice(0, 120)}`);
       // Fall through and let curl have its go; being wrong about the
@@ -178,7 +216,7 @@ export async function fetchShowtimes(
   if (cheap.reading.outcome !== Outcome.BLOCKED || !provider) return cheap;
   console.log("   curl was refused - escalating to a browser");
   try {
-    return await fetchViaBrowser(provider, url, requestedDate);
+    return await browserWithRetries(provider, url, requestedDate);
   } catch (e) {
     // No browser installed, or it failed to start. That is an infrastructure
     // problem, not a finding about the cinema — so the pass records the
