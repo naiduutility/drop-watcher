@@ -17,6 +17,9 @@
  */
 
 import { Outcome, mayAlert, screenMatches, type Reading, type Venue } from "../engine/index.js";
+import {
+  liveTargets, matchedTargets, unannounced, type AlertTarget,
+} from "../lib/alertkeys.js";
 
 export interface SubscriptionView {
   id: string;
@@ -30,6 +33,10 @@ export interface SubscriptionView {
   state: "armed" | "fired" | "acked";
   firedAt: Date | null;
   remindersSent: number;
+  /** Cinema+screen keys already announced. */
+  notifiedKeys: string[];
+  /** Cinema+screen keys silenced. */
+  ackedKeys: string[];
 }
 
 export interface TargetView {
@@ -52,6 +59,8 @@ export type WatchEvent =
       showDate: string;
       /** The venues that satisfied THIS subscription, not every venue found. */
       venues: Venue[];
+      /** Exactly what is being announced, and exactly what "Got it" silences. */
+      targets: AlertTarget[];
     }
   | {
       kind: "reminder";
@@ -59,6 +68,7 @@ export type WatchEvent =
       userId: string;
       showDate: string;
       venues: Venue[];
+      targets: AlertTarget[];
     }
   | {
       kind: "degraded";
@@ -147,20 +157,36 @@ export function planEvents(input: PlanInput): WatchEvent[] {
       const venues = venuesFor(sub, reading);
       if (!venues) continue;
 
-      if (sub.state === "armed") {
+      const matched = matchedTargets(sub.cinemaPicks, sub.screenFilters, reading.venues);
+      const fresh = unannounced(matched, sub.notifiedKeys, sub.ackedKeys);
+      const forTargets = (ts: AlertTarget[]) =>
+        ts.some((t) => t.code === "*")
+          ? venues
+          : venues.filter((v) => ts.some((t) => t.code.toUpperCase() === (v.code ?? "").toUpperCase()));
+
+      if (fresh.length > 0) {
+        // Fires from ANY state but "acked", not only "armed". A date goes on
+        // sale one cinema at a time, and the second one opening an hour later
+        // is news — otherwise whichever multiplex listed first would decide
+        // whether you ever hear about the screen you actually wanted.
         events.push({
           kind: "on_sale", subscriptionId: sub.id, userId: sub.userId,
-          showDate: sub.showDate, venues,
+          showDate: sub.showDate, venues: forTargets(fresh), targets: fresh,
         });
       } else if (
         sub.firedAt &&
         sub.remindersSent < policy.maxReminders &&
         now.getTime() - sub.firedAt.getTime() >= policy.reminderAfterMs
       ) {
-        events.push({
-          kind: "reminder", subscriptionId: sub.id, userId: sub.userId,
-          showDate: sub.showDate, venues,
-        });
+        // Nudge only about what is still live: a screen already silenced must
+        // not come back through the reminder.
+        const live = liveTargets(matched, sub.ackedKeys);
+        if (live.length > 0) {
+          events.push({
+            kind: "reminder", subscriptionId: sub.id, userId: sub.userId,
+            showDate: sub.showDate, venues: forTargets(live), targets: live,
+          });
+        }
       }
     }
     return events;

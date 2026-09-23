@@ -46,7 +46,7 @@ const target: TargetView = {
 const sub = (over: Partial<SubscriptionView> = {}): SubscriptionView => ({
   id: "s1", userId: "u1", showDate: "20260923",
   cinemaPicks: [], screenFilters: [], state: "armed",
-  firedAt: null, remindersSent: 0, ...over,
+  firedAt: null, remindersSent: 0, notifiedKeys: [], ackedKeys: [], ...over,
 });
 
 console.log("\nPacing: cold targets must not spend the request budget");
@@ -144,18 +144,18 @@ console.log("\nReminders: one nudge, not one every five minutes");
 const now = new Date("2026-09-24T12:00:00Z");
 const firedAt = new Date(now.getTime() - 11 * MINUTE);
 check("nudged once after 10 min unacked",
-  planEvents({ target, subscriptions: [sub({ showDate: "20260924", state: "fired", firedAt })], reading, now })
+  planEvents({ target, subscriptions: [sub({ showDate: "20260924", state: "fired", notifiedKeys: ["*"], firedAt })], reading, now })
     .filter((e) => e.kind === "reminder").length, 1);
 check("not nudged at 2 min",
   planEvents({
     target,
-    subscriptions: [sub({ showDate: "20260924", state: "fired", firedAt: new Date(now.getTime() - 2 * MINUTE) })],
+    subscriptions: [sub({ showDate: "20260924", state: "fired", notifiedKeys: ["*"], firedAt: new Date(now.getTime() - 2 * MINUTE) })],
     reading, now,
   }).length, 0);
 check("stops after maxReminders",
   planEvents({
     target,
-    subscriptions: [sub({ showDate: "20260924", state: "fired", firedAt, remindersSent: DEFAULT_POLICY.maxReminders })],
+    subscriptions: [sub({ showDate: "20260924", state: "fired", notifiedKeys: ["*"], firedAt, remindersSent: DEFAULT_POLICY.maxReminders })],
     reading, now,
   }).length, 0);
 

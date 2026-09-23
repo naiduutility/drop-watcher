@@ -166,6 +166,12 @@ export const subscriptions = pgTable("subscriptions", {
   screenFilters: text("screen_filters").array().notNull().default([]),
 
   state: text("state").$type<"armed" | "fired" | "acked">().notNull().default("armed"),
+  /** Cinema+screen keys already announced, so a second cinema opening an hour
+   *  later is news rather than a repeat of the first. */
+  notifiedKeys: text("notified_keys").array().notNull().default([]),
+  /** Keys the person has silenced. Narrower than silencing the whole watch,
+   *  and reversible one key at a time. */
+  ackedKeys: text("acked_keys").array().notNull().default([]),
   firedAt: timestamp("fired_at", { withTimezone: true }),
   remindersSent: integer("reminders_sent").notNull().default(0),
   ackedAt: timestamp("acked_at", { withTimezone: true }),

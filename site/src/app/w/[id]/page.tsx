@@ -276,6 +276,34 @@ export default async function WatchDetail({ params }: { params: { id: string } }
           </section>
         ) : null}
 
+        {sub.ackedKeys.length > 0 ? (
+          <section className="mb-7 border-2 border-neutral-300 p-4">
+            <h2 className="text-[11px] font-extrabold uppercase tracking-kicker text-neutral-700">
+              Silenced screens
+            </h2>
+            <p className="mt-1 text-[14px] text-neutral-700">
+              These stay quiet. The rest of this watch is still running.
+            </p>
+            <ul className="mt-2">
+              {sub.ackedKeys.map((k) => {
+                const screen = k.split("|")[1];
+                return (
+                  <li key={k} className="flex items-center justify-between gap-3 border-t border-divider py-2.5">
+                    <span className="text-[15px] font-semibold">
+                      {screen && screen !== "*" ? screen : k.split("|")[0]?.toUpperCase()}
+                    </span>
+                    <form action={`/s/${params.id}/unack?k=${encodeURIComponent(k)}`} method="post">
+                      <button type="submit" className="min-h-[44px] text-[15px] font-extrabold text-accent-700">
+                        Watch it again
+                      </button>
+                    </form>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
+
         {state === "silenced" ? (
           <form action={watchAgain}>
             <button

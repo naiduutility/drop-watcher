@@ -70,6 +70,15 @@ async function claimDue(now: Date) {
   });
 }
 
+/** The ack link for one alert, naming the keys it announced. */
+function ackUrl(event: WatchEvent): string {
+  const base = `${APP_URL}/s/${event.kind === "degraded" ? "" : event.subscriptionId}/ack`;
+  if (event.kind === "degraded") return base;
+  const keys = event.targets.filter((t) => t.key !== "*");
+  if (keys.length === 0) return base;
+  return `${base}?${keys.map((t) => `k=${encodeURIComponent(t.key)}`).join("&")}`;
+}
+
 function messageFor(
   event: WatchEvent, title: string, city: string, bookingUrl: string, venuesLine: string,
 ): OutboundMessage | null {
@@ -102,7 +111,9 @@ function messageFor(
     // can be tapped from a stale notification to destroy a watch.
     actions: [
       { label: "Book now", url: bookingUrl },
-      { label: "Got it", url: `${APP_URL}/s/${event.subscriptionId}/ack` },
+      // Silences exactly what this alert announced. A watch spanning several
+      // cinemas must not lose the rest because the first one opened.
+      { label: "Got it", url: ackUrl(event) },
     ],
   };
 }
@@ -153,8 +164,17 @@ async function deliver(
 async function applyEvents(events: WatchEvent[], now: Date) {
   for (const event of events) {
     if (event.kind === "on_sale") {
+      // Append the keys just announced. Without this the same cinema would be
+      // re-announced on every pass, and a second cinema opening later could
+      // never be told apart from the first.
       await db.update(subscriptions)
-        .set({ state: "fired", firedAt: now })
+        .set({
+          state: "fired",
+          firedAt: now,
+          notifiedKeys: sql`array(select distinct unnest(${subscriptions.notifiedKeys} || ${
+            event.targets.map((t) => t.key)
+          }::text[]))`,
+        })
         .where(eq(subscriptions.id, event.subscriptionId));
     } else if (event.kind === "reminder") {
       await db.update(subscriptions)
@@ -188,6 +208,7 @@ export async function runPass(now = new Date()): Promise<void> {
         id: s.id, userId: s.userId, showDate: s.showDate,
         cinemaPicks: s.cinemaPicks, screenFilters: s.screenFilters,
         state: s.state, firedAt: s.firedAt, remindersSent: s.remindersSent,
+        notifiedKeys: s.notifiedKeys, ackedKeys: s.ackedKeys,
       }));
 
       const armedDates = views.filter((s) => s.state === "armed").map((s) => s.showDate);

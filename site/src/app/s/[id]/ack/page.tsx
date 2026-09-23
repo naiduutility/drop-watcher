@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { BellOff, Smartphone, Undo2 } from "lucide-react";
 
 import { db } from "../../../../db/index.js";
@@ -15,11 +15,17 @@ export const dynamic = "force-dynamic";
  *
  * It will be tapped from notifications hours old, twice by accident, and by
  * whatever prefetches links. So it is idempotent, scoped to the caller's own
- * watch, and every outcome offers Undo. On 2026-09-22 the equivalent action
- * silenced a whole film for everyone on a shared topic, was re-applied from a
- * 12-hour cache on every run, and could only be undone by renaming the movie.
+ * watch, and every outcome offers Undo.
+ *
+ * What it silences depends on what the alert announced. An alert about AMB's
+ * HDR By Barco carries that key and silences only that screen for that day —
+ * the rest of the watch keeps running, so Prasads opening later still reaches
+ * you. Only an alert with no narrowing at all silences the whole date, which
+ * is the simple watch behaving as it always did.
  */
-export default async function Ack({ params }: { params: { id: string } }) {
+export default async function Ack({
+  params, searchParams,
+}: { params: { id: string }; searchParams: { k?: string | string[] } }) {
   const userId = await currentUserId();
 
   if (!userId) {
@@ -68,13 +74,41 @@ export default async function Ack({ params }: { params: { id: string } }) {
     );
   }
 
-  const already = Boolean(row.sub.ackedAt);
+  const keys = (Array.isArray(searchParams.k) ? searchParams.k : searchParams.k ? [searchParams.k] : [])
+    .map((k) => k.toLowerCase())
+    .filter(Boolean);
+
+  const already = keys.length > 0
+    ? keys.every((k) => row.sub.ackedKeys.includes(k))
+    : Boolean(row.sub.ackedAt);
+
   if (!already) {
-    await db.update(subscriptions)
-      .set({ state: "acked", ackedAt: new Date() })
-      .where(eq(subscriptions.id, params.id));
+    if (keys.length > 0) {
+      await db.update(subscriptions)
+        .set({
+          ackedKeys: sql`array(select distinct unnest(${subscriptions.ackedKeys} || ${keys}::text[]))`,
+        })
+        .where(eq(subscriptions.id, params.id));
+    } else {
+      await db.update(subscriptions)
+        .set({ state: "acked", ackedAt: new Date() })
+        .where(eq(subscriptions.id, params.id));
+    }
   }
+
   const when = dateParts(row.sub.showDate);
+  // "AMB Cinemas — HDR By Barco", reconstructed from the key so the screen
+  // says exactly what went quiet rather than a vague "this date".
+  const what = keys.length > 0
+    ? keys.map((k) => {
+        const screen = k.split("|")[1];
+        return screen && screen !== "*" ? screen : "that cinema";
+      }).join(", ")
+    : null;
+
+  const undoHref = keys.length > 0
+    ? `/s/${params.id}/unack?${keys.map((k) => `k=${encodeURIComponent(k)}`).join("&")}`
+    : `/s/${params.id}/unack`;
 
   return (
     <>
@@ -90,19 +124,22 @@ export default async function Ack({ params }: { params: { id: string } }) {
             <span className="block text-xl font-extrabold tracking-tight1">{row.target.title}</span>
             <span className="mt-0.5 block text-[15px] text-neutral-700">
               {when.short} · {row.target.city}
+              {what ? ` · ${what}` : ""}
             </span>
           </div>
           <div className="border-b-2 border-divider" />
 
           <p className="mt-5 text-[17px] leading-[1.5] text-neutral-800">
             {already
-              ? "You'd already told us to stop for this date. Nothing changed."
-              : "No more alerts for this date. Only yours: friends watching it still get theirs."}
+              ? "You'd already told us to stop for this. Nothing changed."
+              : what
+                ? `No more alerts for ${what} on ${when.short}. The rest of this watch keeps running — if another cinema opens, you'll hear about it.`
+                : "No more alerts for this date. Only yours: friends watching it still get theirs."}
           </p>
         </div>
 
         <div className="sticky bottom-0 bg-bg pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3">
-          <form action={`/s/${params.id}/unack`} method="post">
+          <form action={undoHref} method="post">
             <button
               type="submit"
               className="flex min-h-[64px] w-full items-center justify-between bg-ink px-4 text-xl font-extrabold text-bg transition-transform duration-75 active:scale-[.98]"
