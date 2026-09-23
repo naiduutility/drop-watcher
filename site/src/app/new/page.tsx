@@ -12,6 +12,25 @@ import { AddStep2 } from "../../components/AddStep2.js";
 
 export const dynamic = "force-dynamic";
 
+/** Parse the picker's JSON, defensively: a server action is a public endpoint
+ *  and this arrives from a form field. */
+function readPicks(raw: unknown): { code: string; screens: string[] }[] {
+  try {
+    const parsed = JSON.parse(String(raw ?? "[]"));
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((p) => p && typeof p.code === "string")
+      .slice(0, 60)
+      .map((p) => ({
+        code: String(p.code),
+        screens: Array.isArray(p.screens) ? p.screens.map(String).slice(0, 20) : [],
+      }));
+  } catch {
+    return [];
+  }
+}
+
+
 /** The next fortnight. A date with no shows yet is still offered — that is the
  *  premiere, and the whole reason for this screen. */
 function fortnight(): string[] {
@@ -65,8 +84,8 @@ export default async function New({
 
     const dates = form.getAll("dates").map(String).filter((d) => /^\d{8}$/.test(d));
     if (dates.length === 0) return;
-    const cinemaCodes = form.getAll("cinemaCodes").map(String).filter(Boolean);
-    const screenFilter = String(form.get("screenFilter") ?? "") || null;
+    const cinemaPicks = readPicks(form.get("cinemaPicks"));
+    const screenFilters = form.getAll("screenFilters").map(String).filter(Boolean);
     const title = String(form.get("title") ?? "").trim() || p.slug.replace(/-/g, " ");
 
     // One target per (city, bookCode, language). A second person watching the
@@ -87,7 +106,7 @@ export default async function New({
 
     for (const showDate of dates) {
       await db.insert(subscriptions)
-        .values({ userId: me.id, targetId: target.id, showDate, cinemaCodes, screenFilter })
+        .values({ userId: me.id, targetId: target.id, showDate, cinemaPicks, screenFilters })
         .onConflictDoNothing();
     }
     redirect("/");

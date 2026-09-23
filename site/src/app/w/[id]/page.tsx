@@ -14,6 +14,25 @@ import { WatchHero, type CheckCell } from "../../../components/WatchHero.js";
 
 export const dynamic = "force-dynamic";
 
+/** Parse the picker's JSON, defensively: a server action is a public endpoint
+ *  and this arrives from a form field. */
+function readPicks(raw: unknown): { code: string; screens: string[] }[] {
+  try {
+    const parsed = JSON.parse(String(raw ?? "[]"));
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((p) => p && typeof p.code === "string")
+      .slice(0, 60)
+      .map((p) => ({
+        code: String(p.code),
+        screens: Array.isArray(p.screens) ? p.screens.map(String).slice(0, 20) : [],
+      }));
+  } catch {
+    return [];
+  }
+}
+
+
 const OUTCOME_LABEL: Record<string, string> = {
   [Outcome.OK_SHOWS]: "Clean read · shows listed",
   [Outcome.OK_EMPTY]: "Clean read · nothing listed",
@@ -102,8 +121,8 @@ export default async function WatchDetail({ params }: { params: { id: string } }
     const who = await currentUser();
     if (!who) return;
     await db.update(subscriptions).set({
-      cinemaCodes: form.getAll("cinemaCodes").map(String).filter(Boolean),
-      screenFilter: String(form.get("screenFilter") ?? "") || null,
+      cinemaPicks: readPicks(form.get("cinemaPicks")),
+      screenFilters: form.getAll("screenFilters").map(String).filter(Boolean),
     }).where(and(eq(subscriptions.id, params.id), eq(subscriptions.userId, who.id)));
     redirect(`/w/${params.id}`);
   }
@@ -188,8 +207,8 @@ export default async function WatchDetail({ params }: { params: { id: string } }
           <CinemaPicker
             city={target.city}
             cinemas={cityVenues.map((c) => ({ code: c.code, name: c.name, screens: c.screens }))}
-            initialCodes={sub.cinemaCodes}
-            initialScreen={sub.screenFilter}
+            initialPicks={sub.cinemaPicks}
+            initialScreens={sub.screenFilters}
           />
           <button
             type="submit"

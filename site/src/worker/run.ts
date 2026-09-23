@@ -185,7 +185,7 @@ export async function runPass(now = new Date()): Promise<void> {
                    inArray(subscriptions.state, ["armed", "fired"])));
       const views: SubscriptionView[] = subs.map((s) => ({
         id: s.id, userId: s.userId, showDate: s.showDate,
-        cinemaCodes: s.cinemaCodes, screenFilter: s.screenFilter,
+        cinemaPicks: s.cinemaPicks, screenFilters: s.screenFilters,
         state: s.state, firedAt: s.firedAt, remindersSent: s.remindersSent,
       }));
 

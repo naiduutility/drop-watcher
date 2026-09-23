@@ -22,8 +22,7 @@ export interface WatchView {
   venuesListed?: number;
   lastCleanReadAt: Date | null;
   minutesSinceCleanRead: number | null;
-  cinemaCodes: string[];
-  screenFilter: string | null;
+
   bookUrl: string;
   alsoWatching: Member[];
 }

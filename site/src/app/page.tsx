@@ -4,7 +4,7 @@ import { ArrowUpRight, Bell, Plus } from "lucide-react";
 
 import { currentUser } from "../lib/auth.js";
 import { db } from "../db/index.js";
-import { channels, subscriptions, targets, users } from "../db/schema.js";
+import { channels, subscriptions, targetDates, targets, users } from "../db/schema.js";
 import { showtimesUrl } from "../engine/index.js";
 import {
   ago, byUrgency, minutesSince, summarise, watchState, type WatchView,
@@ -65,6 +65,19 @@ export default async function Home() {
         ))
     : [];
 
+  // How many cinemas each watched date actually had, last clean read.
+  const counts = rows.length
+    ? await db
+        .select({
+          targetId: targetDates.targetId,
+          showDate: targetDates.showDate,
+          venueCount: targetDates.venueCount,
+        })
+        .from(targetDates)
+        .where(inArray(targetDates.targetId, rows.map((r) => r.target.id)))
+    : [];
+  const listedCounts = new Map(counts.map((c) => [`${c.targetId}:${c.showDate}`, c.venueCount]));
+
   const now = new Date();
   const watches: WatchView[] = rows.map(({ sub, target }) => ({
     id: sub.id,
@@ -72,11 +85,11 @@ export default async function Home() {
     city: target.city,
     showDate: sub.showDate,
     state: watchState(sub, target, now),
-    venuesListed: target.offeredDates.includes(sub.showDate) ? undefined : undefined,
+    // From what was actually listed for THIS date, not the city catalogue.
+    // Previously always undefined, so every on-sale card read "0 cinemas".
+    venuesListed: listedCounts.get(`${target.id}:${sub.showDate}`),
     lastCleanReadAt: target.lastOkAt,
     minutesSinceCleanRead: minutesSince(target.lastOkAt, now),
-    cinemaCodes: sub.cinemaCodes,
-    screenFilter: sub.screenFilter,
     bookUrl: showtimesUrl(target.movieUrl, sub.showDate, {
       bookCode: target.bookCode, language: target.language,
     }),

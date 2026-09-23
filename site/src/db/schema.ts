@@ -150,10 +150,20 @@ export const subscriptions = pgTable("subscriptions", {
    * means EVERY cinema in the city and the watch is fully armed either way.
    * A premiere has no venue list to choose from, so requiring a choice would
    * make the product useless in precisely the case it exists for.
+   *
+   * Screens hang off each cinema rather than off the watch, because the thing
+   * people actually want is one particular auditorium: PCX at Prasads, HDR By
+   * Barco at AMB, Dolby Cinema at Allu. A single watch-wide format filter
+   * cannot express that — it would fire for Dolby at Prasads too.
+   *
+   * An empty `screens` on a pick means any screen at that cinema.
    */
-  cinemaCodes: text("cinema_codes").array().notNull().default([]),
-  /** e.g. "IMAX". null = any screen. */
-  screenFilter: text("screen_filter"),
+  cinemaPicks: jsonb("cinema_picks").$type<{ code: string; screens: string[] }[]>()
+    .notNull().default([]),
+  /** Applies when no cinema is picked: "any cinema, but only these formats".
+   *  A list, because a premium screen has several names across a city and
+   *  wanting IMAX *or* Dolby Cinema is one intent, not two watches. */
+  screenFilters: text("screen_filters").array().notNull().default([]),
 
   state: text("state").$type<"armed" | "fired" | "acked">().notNull().default("armed"),
   firedAt: timestamp("fired_at", { withTimezone: true }),

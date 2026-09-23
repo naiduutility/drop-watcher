@@ -45,7 +45,7 @@ const target: TargetView = {
 };
 const sub = (over: Partial<SubscriptionView> = {}): SubscriptionView => ({
   id: "s1", userId: "u1", showDate: "20260923",
-  cinemaCodes: [], screenFilter: null, state: "armed",
+  cinemaPicks: [], screenFilters: [], state: "armed",
   firedAt: null, remindersSent: 0, ...over,
 });
 
@@ -104,15 +104,31 @@ events = planEvents({
 check("silent", events.length, 0);
 
 console.log("\nVenue-specific watch only fires for its own venue");
-const venueSub = (...codes: string[]) => sub({ showDate: "20260924", cinemaCodes: codes });
-check("INOX watcher fires",
-  planEvents({ target, subscriptions: [venueSub("INMT")], reading, now: new Date() }).length, 1);
-check("a cinema not running it stays quiet",
-  planEvents({ target, subscriptions: [venueSub("PVFS")], reading, now: new Date() }).length, 0);
-check("picking nothing means every cinema",
-  planEvents({ target, subscriptions: [sub({ showDate: "20260924", cinemaCodes: [] })], reading, now: new Date() }).length, 1);
-check("a screen nobody is running stays quiet",
-  planEvents({ target, subscriptions: [sub({ showDate: "20260924", screenFilter: "4DX" })], reading, now: new Date() }).length, 0);
+const pick = (...picks: { code: string; screens: string[] }[]) =>
+  sub({ showDate: "20260924", cinemaPicks: picks });
+const fires = (s: SubscriptionView) =>
+  planEvents({ target, subscriptions: [s], reading, now: new Date() }).length;
+
+check("INOX watcher fires", fires(pick({ code: "INMT", screens: [] })), 1);
+check("a cinema not running it stays quiet", fires(pick({ code: "PVFS", screens: [] })), 0);
+check("picking nothing means every cinema", fires(pick()), 1);
+check("any cinema + a format nobody runs stays quiet",
+  fires(sub({ showDate: "20260924", screenFilters: ["4DX"] })), 0);
+check("any cinema + several formats fires if ANY of them is running",
+  fires(sub({ showDate: "20260924", screenFilters: ["4DX", "ATMOS"] })), 1);
+
+console.log("");
+console.log("Screens are matched PER CINEMA, not across the watch");
+// The fixture: INMT runs "Telugu - 2D | ATMOS"; GEPL runs plain "Telugu - 2D".
+check("ATMOS at INOX fires", fires(pick({ code: "INMT", screens: ["ATMOS"] })), 1);
+check("ATMOS at GEPL, which has no ATMOS, stays quiet",
+  fires(pick({ code: "GEPL", screens: ["ATMOS"] })), 0);
+check("asking for ATMOS at GEPL does not fire just because INOX has it",
+  fires(pick({ code: "GEPL", screens: ["ATMOS"] })), 0);
+check("two cinemas, different screens at each, fires on the one that matches",
+  fires(pick({ code: "INMT", screens: ["ATMOS"] }, { code: "GEPL", screens: ["IMAX"] })), 1);
+check("a screen that cinema does not run stays quiet",
+  fires(pick({ code: "INMT", screens: ["IMAX"] })), 0);
 
 console.log("\nAn acked subscription is never re-fired (and the ack is one person's)");
 events = planEvents({

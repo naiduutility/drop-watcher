@@ -22,10 +22,11 @@ export interface SubscriptionView {
   id: string;
   userId: string;
   showDate: string;
-  /** BMS venue codes. EMPTY MEANS EVERY CINEMA — not "no cinemas". */
-  cinemaCodes: string[];
-  /** e.g. "IMAX". null = any screen. */
-  screenFilter: string | null;
+  /** Cinemas, each with the screens wanted THERE. An empty list means every
+   *  cinema; an empty `screens` on a pick means every screen at that one. */
+  cinemaPicks: { code: string; screens: string[] }[];
+  /** Applies only when no cinema is picked. Any of these formats counts. */
+  screenFilters: string[];
   state: "armed" | "fired" | "acked";
   firedAt: Date | null;
   remindersSent: number;
@@ -105,13 +106,26 @@ export interface PlanInput {
  */
 function venuesFor(sub: SubscriptionView, reading: Reading): Venue[] | null {
   let hits = reading.venues;
-  if (sub.cinemaCodes.length > 0) {
-    const wanted = new Set(sub.cinemaCodes.map((c) => c.toUpperCase()));
-    hits = hits.filter((v) => wanted.has((v.code ?? "").toUpperCase()));
+
+  if (sub.cinemaPicks.length > 0) {
+    // Screens are matched PER CINEMA. "PCX at Prasads, Dolby Cinema at Allu"
+    // is two different questions, and a watch-wide format filter would answer
+    // neither — it would also fire for Dolby at Prasads.
+    const wanted = new Map(
+      sub.cinemaPicks.map((p) => [p.code.toUpperCase(), p.screens] as const),
+    );
+    hits = hits.filter((v) => {
+      const screens = wanted.get((v.code ?? "").toUpperCase());
+      if (!screens) return false;
+      if (screens.length === 0) return true; // any screen at this cinema
+      return screens.some((s) => screenMatches(s, v));
+    });
+  } else if (sub.screenFilters.length > 0) {
+    // No cinema chosen, so the formats apply everywhere. Any one of them is
+    // enough: asking for IMAX or Dolby Cinema is a single intent.
+    hits = hits.filter((v) => sub.screenFilters.some((s) => screenMatches(s, v)));
   }
-  if (sub.screenFilter) {
-    hits = hits.filter((v) => screenMatches(sub.screenFilter!, v));
-  }
+
   return hits.length > 0 ? hits : null;
 }
 
