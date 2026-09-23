@@ -8,8 +8,16 @@ env/
 # Playwright local browser cache (if you set PLAYWRIGHT_BROWSERS_PATH=0)
 ms-playwright/
 
-# Local env file — NEVER commit your ntfy topic / email
+# Local env files — NEVER commit ntfy topics, API keys or DATABASE_URL.
+# The repo is PUBLIC: a committed secret is a published secret, and an
+# ntfy topic name IS the password for that person's alerts.
 .env
+.env.*
+!.env.example
 
 # Acknowledgement markers - which movies you've already acked (runtime state)
 .state/
+
+# Node (site/)
+node_modules/
+.next/
