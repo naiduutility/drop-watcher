@@ -35,7 +35,7 @@ export function AddStep1({ initial = "" }: { initial?: string }) {
 
   return (
     <form method="get" className="flex min-h-[calc(100dvh-3.5rem)] flex-col">
-      <div className="flex-1 px-4 pb-6 pt-5">
+      <div className="mx-auto w-full max-w-[720px] flex-1 px-4 pb-6 pt-5">
         <h1 className="text-[32px] font-extrabold leading-[.98] tracking-tight2">
           Paste a showtimes link
         </h1>
@@ -107,7 +107,7 @@ export function AddStep1({ initial = "" }: { initial?: string }) {
           <h2 className="text-[11px] font-extrabold uppercase tracking-kicker text-neutral-700">
             Where the link comes from
           </h2>
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-3 grid max-w-[360px] grid-cols-3 gap-2">
             {[
               { label: "Film page", note: "Book tickets" },
               { label: "Pick date", note: "any date" },
@@ -144,6 +144,7 @@ export function AddStep1({ initial = "" }: { initial?: string }) {
       </div>
 
       <div className="sticky bottom-0 border-t-2 border-divider bg-bg px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto w-full max-w-[720px]">
         <button
           type="submit"
           disabled={kind !== "showtimes"}
@@ -152,6 +153,7 @@ export function AddStep1({ initial = "" }: { initial?: string }) {
           <span>Continue</span>
           <ArrowRight size={20} strokeWidth={2.5} />
         </button>
+        </div>
       </div>
     </form>
   );

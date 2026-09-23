@@ -48,7 +48,7 @@ export function AddStep2({
       <input type="hidden" name="url" value={url} />
       {picked.map((d) => <input key={d} type="hidden" name="dates" value={d} />)}
 
-      <div className="flex-1 px-4 pb-6 pt-5">
+      <div className="mx-auto w-full max-w-[720px] flex-1 px-4 pb-6 pt-5">
         <span className="text-[11px] font-extrabold uppercase tracking-kicker text-neutral-700">
           We found
         </span>
@@ -188,6 +188,7 @@ export function AddStep2({
       </div>
 
       <div className="sticky bottom-0 border-t-2 border-divider bg-bg px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto w-full max-w-[720px]">
         <p className="mb-2 text-[13px] text-neutral-700">
           {picked.length === 0
             ? "Pick at least one date"
@@ -203,6 +204,7 @@ export function AddStep2({
             ? <LoaderCircle size={20} strokeWidth={2.5} className="animate-spin1s" />
             : <Bell size={20} strokeWidth={2.5} />}
         </button>
+        </div>
       </div>
     </form>
   );

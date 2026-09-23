@@ -100,7 +100,7 @@ export default async function Home() {
 
   return (
     <>
-      <AppHeader devices initial={name.charAt(0)} />
+      <AppHeader devices admin={user.isOwner} initial={name.charAt(0)} />
 
       <main className="mx-auto max-w-[1120px] px-4 pb-24 pt-4">
         {watches.length > 0 ? (
