@@ -1,41 +1,56 @@
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { db } from "../../db/index.js";
-import { subscriptions, targets, venues } from "../../db/schema.js";
+import { subscriptions, targets, users, venues } from "../../db/schema.js";
 import { currentUser } from "../../lib/auth.js";
-import {
-  NEEDS_SHOWTIMES_HELP, fromDateInput, parseBmsUrl, toDateInput,
-} from "../../lib/bms-url.js";
+import { parseBmsUrl } from "../../lib/bms-url.js";
+import type { Member } from "../../lib/view.js";
+import { AppHeader } from "../../components/AppHeader.js";
+import { AddStep1 } from "../../components/AddStep1.js";
+import { AddStep2 } from "../../components/AddStep2.js";
 
 export const dynamic = "force-dynamic";
 
-function pretty(yyyymmdd: string) {
-  const d = new Date(
-    Number(yyyymmdd.slice(0, 4)), Number(yyyymmdd.slice(4, 6)) - 1, Number(yyyymmdd.slice(6, 8)),
-  );
-  return d.toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" });
+/** The next fortnight. A date with no shows yet is still offered — that is the
+ *  premiere, and the whole reason for this screen. */
+function fortnight(): string[] {
+  const base = new Date();
+  return Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(base.getTime() + i * 86_400_000);
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  });
 }
 
-/** The next fortnight, so a date with no shows yet is still choosable — which
- *  is the entire premiere case and the reason this product exists. */
-function upcomingDates(): string[] {
-  const out: string[] = [];
-  const base = new Date();
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(base.getTime() + i * 86_400_000);
-    out.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`);
-  }
-  return out;
+function Progress({ step }: { step: 1 | 2 }) {
+  return (
+    <span className="flex items-center gap-2">
+      <span className="flex gap-1">
+        <span className="h-1 w-6 bg-accent-600" />
+        <span className={`h-1 w-6 ${step === 2 ? "bg-accent-600" : "bg-neutral-300"}`} />
+      </span>
+      <span className="text-[13px] font-semibold text-neutral-700">Step {step} of 2</span>
+    </span>
+  );
 }
 
 export default async function New({
   searchParams,
-}: { searchParams: { url?: string; error?: string } }) {
+}: { searchParams: { url?: string } }) {
   const user = await currentUser();
-  if (!user) return <><h1>Add a watch</h1><p>You need an invite link first.</p></>;
+  if (!user) {
+    return (
+      <>
+        <AppHeader />
+        <main className="mx-auto max-w-[640px] px-4 pt-10">
+          <h1 className="text-[28px] font-extrabold tracking-tight2">Add a watch</h1>
+          <p className="mt-3 text-[15px] text-neutral-800">You need an invite link first.</p>
+        </main>
+      </>
+    );
+  }
 
-  const pasted = searchParams.url?.trim();
+  const pasted = searchParams.url?.trim() ?? "";
   const parsed = pasted ? parseBmsUrl(pasted) : null;
 
   async function create(form: FormData) {
@@ -43,20 +58,23 @@ export default async function New({
     const me = await currentUser();
     if (!me) return;
     const raw = String(form.get("url") ?? "");
+    // Classified again here: the client check is for the person, this one is
+    // the guard. A server action is a public endpoint.
     const p = parseBmsUrl(raw);
     if (p.kind !== "showtimes") return;
 
-    const dates = form.getAll("dates").map(String).map(fromDateInput).filter(Boolean) as string[];
-    if (dates.length === 0) {
-      redirect(`/new?url=${encodeURIComponent(raw)}&error=nodates`);
-    }
+    const dates = form.getAll("dates").map(String).filter((d) => /^\d{8}$/.test(d));
+    if (dates.length === 0) return;
+    const cinemaCodes = form.getAll("cinemaCodes").map(String).filter(Boolean);
+    const screenFilter = String(form.get("screenFilter") ?? "") || null;
+    const title = String(form.get("title") ?? "").trim() || p.slug.replace(/-/g, " ");
 
-    // One target per (city, bookCode, language): a second person watching the
-    // same premiere joins the existing target rather than doubling the scrapes.
+    // One target per (city, bookCode, language). A second person watching the
+    // same premiere joins it rather than doubling the requests to BookMyShow.
     const [target] = await db
       .insert(targets)
       .values({
-        city: p.city, slug: p.slug, title: String(form.get("title") ?? p.slug),
+        city: p.city, slug: p.slug, title,
         movieUrl: p.movieUrl, pageCode: p.pageCode ?? "", bookCode: p.bookCode,
         language: p.language, priority: "hot", createdBy: me.id,
       })
@@ -69,114 +87,69 @@ export default async function New({
 
     for (const showDate of dates) {
       await db.insert(subscriptions)
-        .values({ userId: me.id, targetId: target.id, showDate })
+        .values({ userId: me.id, targetId: target.id, showDate, cinemaCodes, screenFilter })
         .onConflictDoNothing();
     }
     redirect("/");
   }
 
-  if (!parsed || parsed.kind === "unrecognised") {
+  if (!parsed || parsed.kind !== "showtimes") {
     return (
       <>
-        <h1>Add a watch</h1>
-        {parsed?.kind === "unrecognised" ? (
-          <p className="warn">{parsed.reason}</p>
-        ) : null}
-        <form method="get">
-          <p><input type="url" name="url" placeholder="Paste a BookMyShow showtimes link" required /></p>
-          <button type="submit">Continue</button>
-        </form>
-        <div className="card">
-          <strong>Which link?</strong>
-          <p className="muted" style={{ margin: ".35rem 0 0" }}>
-            Open the film on BookMyShow, tap <em>Book tickets</em>, pick any date,
-            then copy the URL from the address bar. That page&apos;s address carries
-            the booking code — the movie page&apos;s does not, and a guessed code
-            produces a watch that stays silent forever.
-          </p>
-        </div>
-        <p><a href="/">Back to your watches</a></p>
+        <AppHeader back={{ href: "/", label: "Back" }} right={<Progress step={1} />} />
+        <AddStep1 initial={pasted} />
       </>
     );
   }
 
-  if (parsed.kind === "movie") {
-    return (
-      <>
-        <h1>Nearly — one more step</h1>
-        <p className="warn">{NEEDS_SHOWTIMES_HELP}</p>
-        <p className="muted">
-          You pasted the page for <strong>{parsed.slug}</strong> in {parsed.city}.
-        </p>
-        <form method="get">
-          <p><input type="url" name="url" placeholder="Paste the showtimes link" required /></p>
-          <button type="submit">Continue</button>
-        </form>
-      </>
-    );
+  // Everything step 2 needs, in parallel: the city's known cinemas, whether
+  // this film already exists (for its date strip), and who else watches it.
+  const [known, existing] = await Promise.all([
+    db.select({ code: venues.code, name: venues.name, screens: venues.screens })
+      .from(venues).where(eq(venues.city, parsed.city)).limit(60),
+    db.select({ id: targets.id, offeredDates: targets.offeredDates })
+      .from(targets)
+      .where(and(eq(targets.city, parsed.city), eq(targets.bookCode, parsed.bookCode)))
+      .limit(1),
+  ]);
+
+  const targetId = existing[0]?.id;
+  const mine: Record<string, string> = {};
+  let friends: Member[] = [];
+
+  if (targetId) {
+    const [ours, theirs] = await Promise.all([
+      db.select({ id: subscriptions.id, showDate: subscriptions.showDate })
+        .from(subscriptions)
+        .where(and(eq(subscriptions.targetId, targetId), eq(subscriptions.userId, user.id))),
+      db.select({ id: users.id, name: users.displayName })
+        .from(subscriptions)
+        .innerJoin(users, eq(subscriptions.userId, users.id))
+        .where(and(eq(subscriptions.targetId, targetId), ne(subscriptions.userId, user.id))),
+    ]);
+    for (const row of ours) mine[row.showDate] = row.id;
+    const seen = new Set<string>();
+    friends = theirs
+      .filter((f) => !seen.has(f.id) && seen.add(f.id))
+      .map((f) => ({ id: f.id, name: f.name ?? "A friend" }));
   }
-
-  // Known cinemas in this city, purely to reassure: refinement to a specific
-  // theatre happens after the first read, when we know what is actually running.
-  const known = await db
-    .select({ name: venues.name, code: venues.code })
-    .from(venues).where(eq(venues.city, parsed.city)).limit(60);
-
-  const existing = await db
-    .select({ id: targets.id, offeredDates: targets.offeredDates })
-    .from(targets)
-    .where(and(eq(targets.city, parsed.city), eq(targets.bookCode, parsed.bookCode)))
-    .limit(1);
-  const onSale = new Set(existing[0]?.offeredDates ?? []);
 
   return (
     <>
-      <h1>Which dates?</h1>
-      <p className="muted">
-        {parsed.city} · booking code <code>{parsed.bookCode}</code>
-        {parsed.language ? ` · ${parsed.language}` : ""}
-      </p>
-
-      <form action={create}>
-        <input type="hidden" name="url" value={pasted} />
-        <p>
-          <input type="text" name="title" defaultValue={parsed.slug.replace(/-/g, " ")}
-                 placeholder="What to call it in alerts" />
-        </p>
-        <div>
-          {upcomingDates().map((d) => (
-            <label className="date" key={d}>
-              <input type="checkbox" name="dates" value={toDateInput(d)}
-                     defaultChecked={d === parsed.date} />
-              <span>
-                {pretty(d)}
-                {onSale.has(d)
-                  ? <span className="muted"> · on sale</span>
-                  : <span className="muted"> · not yet</span>}
-              </span>
-            </label>
-          ))}
-        </div>
-        {searchParams.error === "nodates" ? (
-          <p className="warn">Pick at least one date.</p>
-        ) : null}
-        <p className="muted" style={{ fontSize: ".85rem" }}>
-          Dates marked <em>not yet</em> are the useful ones: a premiere that has
-          no shows listed is exactly what this watches for.
-        </p>
-        <button type="submit">Start watching</button>
-      </form>
-
-      <h2>Theatres</h2>
-      <p className="muted">
-        Watching <strong>any theatre</strong> in {parsed.city} to begin with. Once
-        the first check runs you can narrow it to particular cinemas or screens —
-        a venue list only exists for a date that is already on sale.
-        {known.length > 0
-          ? ` We currently know ${known.length} cinema(s) here from previous checks.`
-          : " We have not catalogued this city yet; the first check will start it."}
-      </p>
-      <p><a href="/">Back to your watches</a></p>
+      <AppHeader back={{ href: "/new", label: "Back" }} right={<Progress step={2} />} />
+      <AddStep2
+        action={create}
+        url={pasted}
+        film={parsed.slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+        city={parsed.city.replace(/\b\w/g, (c) => c.toUpperCase())}
+        language={parsed.language}
+        dates={fortnight()}
+        onSale={existing[0]?.offeredDates ?? []}
+        alreadyMine={mine}
+        cinemas={known.map((c) => ({ code: c.code, name: c.name, screens: c.screens }))}
+        friends={friends}
+        defaultDate={parsed.date}
+      />
     </>
   );
 }
