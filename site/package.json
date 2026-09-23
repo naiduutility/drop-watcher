@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "tsx tests/engine.test.ts && tsx tests/core.test.ts && tsx tests/url.test.ts && tsx tests/session.test.ts && tsx tests/env.test.ts && tsx tests/retry.test.ts",
+    "test": "tsx tests/engine.test.ts && tsx tests/core.test.ts && tsx tests/url.test.ts && tsx tests/session.test.ts && tsx tests/env.test.ts && tsx tests/retry.test.ts && tsx tests/format.test.ts",
     "worker": "tsx --env-file=.env.local src/worker/run.ts",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",

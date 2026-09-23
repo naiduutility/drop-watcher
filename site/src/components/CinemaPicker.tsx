@@ -132,7 +132,7 @@ export function CinemaPicker({
               {picks.length === 0 && anyCinemaFormats.length > 0 ? (
                 <>
                   <span className="text-[11px] font-extrabold uppercase tracking-kicker text-neutral-700">
-                    Screen format · any cinema
+                    Screens · any cinema
                   </span>
                   <p className="mt-1 text-[13px] text-neutral-700">
                     Pick as many as you like. Or tick a cinema below to choose screens there
@@ -150,8 +150,8 @@ export function CinemaPicker({
               ) : null}
 
               <p className="mt-4 text-[13px] text-neutral-700">
-                Cinemas we&apos;ve seen in {city}. Formats are what we&apos;ve spotted there
-                before, not a promise for your date.
+                Cinemas we&apos;ve seen in {city}, and the screens we&apos;ve spotted at each —
+                not a promise for your date.
               </p>
 
               <ul className="mt-2">
@@ -193,18 +193,24 @@ export function CinemaPicker({
                           </span>
                           {formats.length === 0 ? (
                             <p className="mt-1 text-[13px] text-neutral-700">
-                              No formats seen here yet — this cinema counts on any screen.
+                              No screens seen here yet — this cinema counts on any screen.
                             </p>
                           ) : (
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {formats.map((s) => (
-                                <button key={s} type="button"
-                                        onClick={() => toggleCinemaScreen(c.code, s)}
-                                        className={chip(pick!.screens.includes(s))}>
-                                  {s}
-                                </button>
-                              ))}
-                            </div>
+                            <>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {formats.map((s) => (
+                                  <button key={s} type="button"
+                                          onClick={() => toggleCinemaScreen(c.code, s)}
+                                          className={chip(pick!.screens.includes(s))}>
+                                    {s}
+                                  </button>
+                                ))}
+                              </div>
+                              <p className="mt-2 text-[12px] text-neutral-700">
+                                A screen counts whatever is playing on it — 2D, 3D or anything
+                                else.
+                              </p>
+                            </>
                           )}
                         </div>
                       ) : null}
