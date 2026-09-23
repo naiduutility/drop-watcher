@@ -159,6 +159,20 @@ export async function fetchViaBrowser(
 export async function fetchShowtimes(
   url: string, requestedDate: string | null, provider?: ContextProvider,
 ): Promise<FetchResult> {
+  // Measured 2026-09-23: curl gets the full payload from a residential IP and
+  // a flat 403 from GitHub's Azure runners. Where curl is known to be refused,
+  // attempting it anyway is not merely a wasted 100ms — it is another request
+  // to an IP BookMyShow is already unhappy with, spent to learn nothing.
+  if (process.env.PREFER_BROWSER === "1" && provider) {
+    try {
+      return await fetchViaBrowser(provider, url, requestedDate);
+    } catch (e) {
+      console.error(`   browser unavailable: ${(e instanceof Error ? e.message : String(e)).slice(0, 120)}`);
+      // Fall through and let curl have its go; being wrong about the
+      // environment must not mean making no attempt at all.
+    }
+  }
+
   const cheap = await fetchViaCurl(url, requestedDate);
   if (cheap.reading.outcome !== Outcome.BLOCKED || !provider) return cheap;
   console.log("   curl was refused - escalating to a browser");

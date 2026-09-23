@@ -21,7 +21,7 @@ concurrency:
 jobs:
   pass:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: site
@@ -30,21 +30,32 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: site/package-lock.json
 
       - run: npm ci
 
-      # No browser install. Reads go out via curl, which is already on the
-      # runner: measured same-IP on 2026-09-23, curl returned the full payload
-      # in 0.6s where Node's fetch was refused outright and Playwright cost
-      # ~25s plus a download. The worker escalates to a browser only if curl is
-      # refused, and records BLOCKED honestly when no browser is available —
-      # which raises the degraded alert rather than looking like "no tickets".
+      # Measured on 2026-09-23, same minute, two IPs: curl fetched the whole
+      # payload in 0.6s from a residential connection and was refused with a
+      # flat HTTP 403 from a GitHub runner. BookMyShow's Cloudflare scores the
+      # datacenter IP, not just the client. So on Actions a browser is not the
+      # fallback — it is the only transport that works, and PREFER_BROWSER
+      # below stops the worker spending a doomed request to rediscover that
+      # every single pass.
+      - name: Cache Chromium
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
       - name: Run one pass
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           APP_URL: ${{ secrets.APP_URL }}
           NTFY_SERVER: ${{ secrets.NTFY_SERVER }}
+          PREFER_BROWSER: "1"
         run: npx tsx src/worker/run.ts
