@@ -103,6 +103,45 @@ check("but Prasads still alerts", events.length, 1);
 check("about Prasads",
   events[0]!.kind === "on_sale" ? events[0]!.venues.map((v) => v.code) : [], ["PRHN"]);
 
+console.log("");
+console.log("TWO SCREENS AT ONE CINEMA, opening at different times");
+// Subtly different from two cinemas: same venue code, two keys. A watch on
+// AMB's HDR By Barco and BARCO FLAGSHIP must treat them as separate news and
+// separate silences, even though it is one building.
+const AMB_HDR: Venue = {
+  code: "AMBH", name: "AMB Cinemas: Gachibowli",
+  screens: ["English • 2D | HDR By Barco"],
+};
+const AMB_BOTH: Venue = {
+  code: "AMBH", name: "AMB Cinemas: Gachibowli",
+  screens: ["English • 2D | HDR By Barco", "English • 3D | BARCO FLAGSHIP"],
+};
+const twoScreens = [{ code: "AMBH", screens: ["HDR By Barco", "BARCO FLAGSHIP"] }];
+const subTwo = (o: Partial<SubscriptionView> = {}): SubscriptionView =>
+  sub({ cinemaPicks: twoScreens, ...o });
+
+events = fire(subTwo(), [AMB_HDR]);
+check("first screen opens: one alert", events.length, 1);
+check("naming only that screen",
+  events[0]!.kind === "on_sale" ? events[0]!.targets.map((t) => t.screen) : [], ["HDR By Barco"]);
+
+const oneHushed = subTwo({
+  state: "fired", firedAt: new Date(),
+  notifiedKeys: ["ambh|hdr by barco"], ackedKeys: ["ambh|hdr by barco"],
+});
+check("silenced, and nothing new: quiet", fire(oneHushed, [AMB_HDR]).length, 0);
+
+events = fire(oneHushed, [AMB_BOTH]);
+check("the SECOND screen at the same cinema still alerts", events.length, 1);
+check("about the second screen only",
+  events[0]!.kind === "on_sale" ? events[0]!.targets.map((t) => t.screen) : [], ["BARCO FLAGSHIP"]);
+check("and once both are announced, quiet again",
+  fire(subTwo({
+    state: "fired", firedAt: new Date(),
+    notifiedKeys: ["ambh|hdr by barco", "ambh|barco flagship"],
+    ackedKeys: ["ambh|hdr by barco"],
+  }), [AMB_BOTH]).length, 0);
+
 console.log("\nSilencing the whole watch still silences everything");
 check("state acked beats any key",
   fire(sub({ state: "acked" }), [AMB, PRASADS]).length, 0);
