@@ -27,7 +27,26 @@ import type { Outcome } from "../engine/index.js";
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
+  /** Shown to the group: "Ravi is watching this too". Collected at join. */
   displayName: text("display_name"),
+  /** Owner-only screens (invites) 404 for everyone else. */
+  isOwner: boolean("is_owner").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Pairing a second device.
+ *
+ * There are no passwords, so a signed-in phone mints a short-lived code and
+ * the new device redeems it. Stored rather than stateless because "this link
+ * has already been used" is a state the UI promises to show, and a signed
+ * token alone cannot know it.
+ */
+export const deviceLinks = pgTable("device_links", {
+  code: text("code").primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -126,10 +145,15 @@ export const subscriptions = pgTable("subscriptions", {
   targetId: uuid("target_id").notNull().references(() => targets.id, { onDelete: "cascade" }),
   /** YYYYMMDD. The date this person actually cares about. */
   showDate: text("show_date").notNull(),
-  kind: text("kind").$type<"date" | "venue" | "screen">().notNull().default("date"),
-  /** For kind=venue/screen: the wording to match against BMS venue names. */
-  venueEntry: text("venue_entry"),
-  screenEntry: text("screen_entry"),
+  /**
+   * Optional narrowing, and optional is the load-bearing word: an empty list
+   * means EVERY cinema in the city and the watch is fully armed either way.
+   * A premiere has no venue list to choose from, so requiring a choice would
+   * make the product useless in precisely the case it exists for.
+   */
+  cinemaCodes: text("cinema_codes").array().notNull().default([]),
+  /** e.g. "IMAX". null = any screen. */
+  screenFilter: text("screen_filter"),
 
   state: text("state").$type<"armed" | "fired" | "acked">().notNull().default("armed"),
   firedAt: timestamp("fired_at", { withTimezone: true }),
@@ -137,8 +161,10 @@ export const subscriptions = pgTable("subscriptions", {
   ackedAt: timestamp("acked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
-  once: uniqueIndex("subscriptions_once")
-    .on(t.userId, t.targetId, t.showDate, t.kind, t.venueEntry, t.screenEntry),
+  // One watch per person, per film, per date. Cinema narrowing lives ON the
+  // watch rather than making a second one, which is what lets the UI say
+  // "you already watch this date" instead of quietly creating a duplicate.
+  once: uniqueIndex("subscriptions_once").on(t.userId, t.targetId, t.showDate),
   byTarget: index("subscriptions_by_target").on(t.targetId, t.state),
 }));
 

@@ -15,17 +15,23 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.6.1",
     "drizzle-kit": "^0.31.11",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^3.4.19",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",
+    "lucide-react": "^1.47.0",
     "next": "^14.2.35",
     "playwright": "^1.63.0",
     "postgres": "^3.4.9",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   }

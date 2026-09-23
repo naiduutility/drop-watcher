@@ -44,8 +44,8 @@ const target: TargetView = {
   createdAt: new Date("2026-09-01T00:00:00Z"),
 };
 const sub = (over: Partial<SubscriptionView> = {}): SubscriptionView => ({
-  id: "s1", userId: "u1", showDate: "20260923", kind: "date",
-  venueEntry: null, screenEntry: null, state: "armed",
+  id: "s1", userId: "u1", showDate: "20260923",
+  cinemaCodes: [], screenFilter: null, state: "armed",
   firedAt: null, remindersSent: 0, ...over,
 });
 
@@ -104,11 +104,15 @@ events = planEvents({
 check("silent", events.length, 0);
 
 console.log("\nVenue-specific watch only fires for its own venue");
-const venueSub = (v: string) => sub({ showDate: "20260924", kind: "venue", venueEntry: v });
+const venueSub = (...codes: string[]) => sub({ showDate: "20260924", cinemaCodes: codes });
 check("INOX watcher fires",
-  planEvents({ target, subscriptions: [venueSub("INOX SRMT")], reading, now: new Date() }).length, 1);
-check("a venue not running it stays quiet",
-  planEvents({ target, subscriptions: [venueSub("PVR Nexus")], reading, now: new Date() }).length, 0);
+  planEvents({ target, subscriptions: [venueSub("INMT")], reading, now: new Date() }).length, 1);
+check("a cinema not running it stays quiet",
+  planEvents({ target, subscriptions: [venueSub("PVFS")], reading, now: new Date() }).length, 0);
+check("picking nothing means every cinema",
+  planEvents({ target, subscriptions: [sub({ showDate: "20260924", cinemaCodes: [] })], reading, now: new Date() }).length, 1);
+check("a screen nobody is running stays quiet",
+  planEvents({ target, subscriptions: [sub({ showDate: "20260924", screenFilter: "4DX" })], reading, now: new Date() }).length, 0);
 
 console.log("\nAn acked subscription is never re-fired (and the ack is one person's)");
 events = planEvents({

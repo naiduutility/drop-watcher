@@ -16,15 +16,16 @@
  * Pure: state in, events out. No database, no clock, no network.
  */
 
-import { Outcome, mayAlert, matchedVenues, type Reading, type Venue } from "../engine/index.js";
+import { Outcome, mayAlert, screenMatches, type Reading, type Venue } from "../engine/index.js";
 
 export interface SubscriptionView {
   id: string;
   userId: string;
   showDate: string;
-  kind: "date" | "venue" | "screen";
-  venueEntry: string | null;
-  screenEntry: string | null;
+  /** BMS venue codes. EMPTY MEANS EVERY CINEMA — not "no cinemas". */
+  cinemaCodes: string[];
+  /** e.g. "IMAX". null = any screen. */
+  screenFilter: string | null;
   state: "armed" | "fired" | "acked";
   firedAt: Date | null;
   remindersSent: number;
@@ -94,13 +95,23 @@ export interface PlanInput {
   policy?: EventPolicy;
 }
 
-/** The venues satisfying one subscription, or null if it isn't satisfied. */
+/**
+ * The venues satisfying one subscription, or null if it isn't satisfied.
+ *
+ * An empty `cinemaCodes` means every cinema. That default is doing real work:
+ * a premiere has no venue list to pick from when the watch is created, so a
+ * model where narrowing were required would be useless in exactly the case
+ * this product exists for.
+ */
 function venuesFor(sub: SubscriptionView, reading: Reading): Venue[] | null {
-  if (sub.kind === "date") {
-    return reading.venues.length > 0 ? reading.venues : null;
+  let hits = reading.venues;
+  if (sub.cinemaCodes.length > 0) {
+    const wanted = new Set(sub.cinemaCodes.map((c) => c.toUpperCase()));
+    hits = hits.filter((v) => wanted.has((v.code ?? "").toUpperCase()));
   }
-  if (!sub.venueEntry) return null;
-  const hits = matchedVenues(reading.venues, sub.venueEntry, sub.screenEntry);
+  if (sub.screenFilter) {
+    hits = hits.filter((v) => screenMatches(sub.screenFilter!, v));
+  }
   return hits.length > 0 ? hits : null;
 }
 

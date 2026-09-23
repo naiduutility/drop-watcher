@@ -182,8 +182,8 @@ export async function runPass(now = new Date()): Promise<void> {
         .where(and(eq(subscriptions.targetId, target.id),
                    inArray(subscriptions.state, ["armed", "fired"])));
       const views: SubscriptionView[] = subs.map((s) => ({
-        id: s.id, userId: s.userId, showDate: s.showDate, kind: s.kind,
-        venueEntry: s.venueEntry, screenEntry: s.screenEntry,
+        id: s.id, userId: s.userId, showDate: s.showDate,
+        cinemaCodes: s.cinemaCodes, screenFilter: s.screenFilter,
         state: s.state, firedAt: s.firedAt, remindersSent: s.remindersSent,
       }));
 

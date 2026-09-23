@@ -69,7 +69,7 @@ export default async function New({
 
     for (const showDate of dates) {
       await db.insert(subscriptions)
-        .values({ userId: me.id, targetId: target.id, showDate, kind: "date" })
+        .values({ userId: me.id, targetId: target.id, showDate })
         .onConflictDoNothing();
     }
     redirect("/");
