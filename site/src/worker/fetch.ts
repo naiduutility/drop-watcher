@@ -250,3 +250,66 @@ export async function browserProvider(): Promise<{
   }) as ContextProvider;
   return { provider, close: async () => { await browser?.close().catch(() => {}); } };
 }
+
+/**
+ * Fetch any page and hand back the raw parts.
+ *
+ * Used for a film's own page, where the caller interprets the result rather
+ * than the showtimes engine. Same transport rules: browser first where curl is
+ * known to be refused, curl otherwise.
+ */
+export async function fetchPage(
+  url: string, provider?: ContextProvider,
+): Promise<{ html: string; bodyText: string; httpStatus: number; durationMs: number }> {
+  const started = Date.now();
+
+  if (process.env.PREFER_BROWSER === "1" && provider) {
+    try {
+      const context = await provider();
+      const page = await context.newPage();
+      try {
+        const res = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
+        await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
+        await page.waitForTimeout(4000);
+        return {
+          html: await page.content(),
+          bodyText: await page.innerText("body").catch(() => ""),
+          httpStatus: res?.status() ?? 0,
+          durationMs: Date.now() - started,
+        };
+      } finally {
+        await page.close().catch(() => {});
+      }
+    } catch (e) {
+      console.error(`   browser unavailable: ${(e instanceof Error ? e.message : String(e)).slice(0, 120)}`);
+    }
+  }
+
+  const dir = await mkdtemp(join(tmpdir(), "dw-"));
+  const bodyPath = join(dir, "body.html");
+  const headPath = join(dir, "head.txt");
+  try {
+    await execFileAsync("curl", [
+      "-sS", "--compressed", "--max-time", "30",
+      "-o", bodyPath, "-D", headPath,
+      "-H", `User-Agent: ${USER_AGENT}`,
+      "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "-H", "Accept-Language: en-IN,en;q=0.9",
+      url,
+    ], { maxBuffer: 1 << 16 });
+    const headers = await readFile(headPath, "utf8").catch(() => "");
+    const codes = [...headers.matchAll(/^HTTP\/[\d.]+\s+(\d{3})/gm)].map((m) => Number(m[1]));
+    const html = await readFile(bodyPath, "utf8").catch(() => "");
+    return {
+      html,
+      // curl gives no rendered text; a short body is the block signal instead.
+      bodyText: html.length < 8000 ? html : "",
+      httpStatus: codes.at(-1) ?? 0,
+      durationMs: Date.now() - started,
+    };
+  } catch (e) {
+    return { html: "", bodyText: String(e).slice(0, 200), httpStatus: 0, durationMs: Date.now() - started };
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}

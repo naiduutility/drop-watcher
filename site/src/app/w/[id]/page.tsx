@@ -64,7 +64,10 @@ export default async function WatchDetail({ params }: { params: { id: string } }
   const { sub, target } = row;
   const now = new Date();
   const state = watchState(sub, target, now);
-  const when = dateParts(sub.showDate);
+  const pending = sub.showDate === "*";
+  const when = pending
+    ? { short: "when it opens", long: "when booking opens", weekday: "", day: "", month: "" }
+    : dateParts(sub.showDate);
   const bookUrl = showtimesUrl(target.movieUrl, sub.showDate, {
     bookCode: target.bookCode, language: target.language,
   });

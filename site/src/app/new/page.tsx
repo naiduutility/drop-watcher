@@ -72,6 +72,42 @@ export default async function New({
   const pasted = searchParams.url?.trim() ?? "";
   const parsed = pasted ? parseBmsUrl(pasted) : null;
 
+  /**
+   * A film with no Book tickets button yet.
+   *
+   * There is no showtimes page, so no booking code and no dates to choose —
+   * the watch is simply "tell me when this goes on sale". The worker reads the
+   * film's own page until the CTA appears, proves a code, and promotes it.
+   */
+  async function watchUnreleased(form: FormData) {
+    "use server";
+    const me = await currentUser();
+    if (!me) return;
+    const p = parseBmsUrl(String(form.get("url") ?? ""));
+    if (p.kind !== "movie") return;
+
+    const [t] = await db.insert(targets).values({
+      city: p.city, slug: p.slug,
+      title: String(form.get("title") ?? "").trim() || p.slug.replace(/-/g, " "),
+      movieUrl: p.movieUrl, pageCode: p.pageCode, bookCode: "",
+      language: null, status: "unresolved",
+      // A release months away does not need checking every few minutes, and
+      // every request spends a budget the on-sale watches need more.
+      priority: "cold", createdBy: me.id,
+    }).onConflictDoUpdate({
+      target: [targets.city, targets.bookCode, targets.language],
+      set: { status: "unresolved" },
+    }).returning();
+    if (!t) return;
+
+    // "*" is the date sentinel for "whenever booking opens" — there are no
+    // real dates to pick until BookMyShow creates them.
+    await db.insert(subscriptions)
+      .values({ userId: me.id, targetId: t.id, showDate: "*" })
+      .onConflictDoNothing();
+    redirect("/");
+  }
+
   async function create(form: FormData) {
     "use server";
     const me = await currentUser();
@@ -110,6 +146,54 @@ export default async function New({
         .onConflictDoNothing();
     }
     redirect("/");
+  }
+
+  if (parsed?.kind === "movie") {
+    return (
+      <>
+        <AppHeader back={{ href: "/new", label: "Back" }} right={<Progress step={1} />} />
+        <main className="mx-auto w-full max-w-[720px] px-4 pb-16 pt-5">
+          <span className="text-[11px] font-extrabold uppercase tracking-kicker text-neutral-700">
+            Not on sale yet
+          </span>
+          <h1 className="mt-1 text-[32px] font-extrabold leading-[.98] tracking-tight2">
+            {parsed.slug.replace(/-/g, " ")}
+          </h1>
+          <p className="mt-3 text-[15px] leading-[1.5] text-neutral-800">
+            This film has no <strong>Book tickets</strong> button yet, so there are no dates to
+            choose and no showtimes link to paste. We can watch the film&apos;s own page instead
+            and tell you the moment booking opens in {parsed.city}.
+          </p>
+          <p className="mt-3 text-[15px] leading-[1.5] text-neutral-800">
+            You&apos;ll get one alert when it goes on sale. Then you pick the dates you want, the
+            same as any other watch.
+          </p>
+          <form action={watchUnreleased} className="mt-6">
+            <input type="hidden" name="url" value={pasted} />
+            <label className="block">
+              <span className="text-[11px] font-extrabold uppercase tracking-kicker text-neutral-700">
+                Name in your alerts
+              </span>
+              <input
+                name="title"
+                defaultValue={parsed.slug.replace(/-/g, " ")}
+                className="mt-2 w-full border-2 border-divider bg-transparent px-3 py-3 text-[15px] outline-none"
+              />
+            </label>
+            <button
+              type="submit"
+              className="mt-4 flex min-h-[54px] w-full items-center justify-between bg-accent-600 px-4 text-[17px] font-extrabold text-white"
+            >
+              <span>Tell me when booking opens</span>
+            </button>
+          </form>
+          <p className="mt-4 text-[13px] text-neutral-700">
+            Checked about hourly until it opens — a release months away doesn&apos;t need more,
+            and every request is one the on-sale watches need more than this.
+          </p>
+        </main>
+      </>
+    );
   }
 
   if (!parsed || parsed.kind !== "showtimes") {

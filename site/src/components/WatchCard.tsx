@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {
-  ArrowUpRight, Bell, BellOff, Check, Clock, EyeOff, LoaderCircle, Ticket,
+  ArrowUpRight, Bell, BellOff, Check, Clock, EyeOff, Hourglass, LoaderCircle, Ticket,
 } from "lucide-react";
 
 import { dateParts, type WatchView } from "../lib/view.js";
@@ -116,6 +116,25 @@ export function WatchCard({ watch }: { watch: WatchView }) {
             </button>
           </form>
         </div>
+      </article>
+    );
+  }
+
+  if (watch.state === "pending") {
+    return (
+      <article className="border-2 border-dashed border-divider p-3.5">
+        <div className={`${KICKER} text-neutral-700`}>
+          <Hourglass size={16} strokeWidth={2.5} />
+          <span>Not on sale yet</span>
+        </div>
+        <Link href={href} className="mt-2 flex flex-col gap-0.5 text-ink no-underline">
+          <span className="text-lg font-extrabold leading-[1.15] tracking-tight1">{watch.title}</span>
+          <span className="text-sm text-neutral-700">{watch.city}</span>
+        </Link>
+        <p className="mt-2 text-[13px] leading-[1.4] text-neutral-700">
+          Watching the film&apos;s page. You&apos;ll hear the moment booking opens, then you pick
+          your dates.
+        </p>
       </article>
     );
   }

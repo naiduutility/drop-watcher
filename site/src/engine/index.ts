@@ -10,6 +10,7 @@
  */
 
 export * from "./outcomes.js";
+export * from "./movie.js";
 export * from "./parse.js";
 export * from "./match.js";
 export * from "./urls.js";

@@ -28,6 +28,7 @@ import { channelFor, type OutboundMessage } from "../notify/index.js";
 import { rememberVenues } from "../lib/venues.js";
 import { matchedScreensFor } from "../lib/narrowing.js";
 import { browserProvider, fetchShowtimes, sleep, PACING_MS } from "./fetch.js";
+import { checkUnresolved } from "./unresolved.js";
 import { envBaseUrl, envNumber } from "../lib/env.js";
 
 const BATCH = envNumber("WORKER_BATCH", 8);
@@ -54,7 +55,7 @@ async function claimDue(now: Date) {
     const due = await tx
       .select()
       .from(targets)
-      .where(and(eq(targets.status, "active"), lte(targets.nextDueAt, now)))
+      .where(and(inArray(targets.status, ["active", "unresolved"]), lte(targets.nextDueAt, now)))
       .orderBy(targets.nextDueAt)
       .limit(BATCH)
       .for("update", { skipLocked: true });
@@ -210,6 +211,39 @@ export async function runPass(now = new Date()): Promise<void> {
   const { provider, close } = await browserProvider();
   try {
     for (const target of due) {
+      // A film that has not gone on sale has no showtimes page to read, so it
+      // takes a different pass entirely: watch its own page for the Book
+      // tickets CTA, then prove a booking code before promoting it.
+      if (target.status === "unresolved") {
+        console.log(`
+==== ${target.title} (${target.city}) — not on sale yet ====`);
+        const opened = await checkUnresolved(target, provider, now);
+        if (opened) {
+          console.log(`   BOOKING OPENED · code ${opened.bookCode}`);
+          const message = {
+            title: `${opened.title}: booking is OPEN`,
+            body:
+              `Tickets have gone on sale in ${opened.city}. Pick the dates you want and ` +
+              `we'll watch them.
+${APP_URL}/w/${opened.targetId}`,
+            clickUrl: `${APP_URL}/w/${opened.targetId}`,
+            priority: "high" as const,
+          };
+          const rows = await db.select().from(channels)
+            .where(and(inArray(channels.userId, opened.userIds), eq(channels.active, true)));
+          for (const row of rows) {
+            const result = await channelFor(row).send(message);
+            await db.insert(notifications).values({
+              subscriptionId: null, channelId: row.id, event: "on_sale",
+              title: message.title, body: message.body,
+              ok: result.ok, error: result.error ?? null,
+            });
+            if (!result.ok) console.error(`!! delivery failed: ${result.error}`);
+          }
+        }
+        continue;
+      }
+
       const subs = await db.select().from(subscriptions)
         .where(and(eq(subscriptions.targetId, target.id),
                    inArray(subscriptions.state, ["armed", "fired"])));

@@ -9,7 +9,15 @@
 import { Outcome } from "../engine/index.js";
 import type { Subscription, Target } from "../db/schema.js";
 
-export type WatchState = "waiting" | "on_sale" | "silenced" | "cant_read" | "new";
+export type WatchState = "waiting" | "on_sale" | "silenced" | "cant_read" | "new" | "pending";
+
+/** The date sentinel for "whenever booking opens". A film with no Book
+ *  tickets button has no dates to choose, so there is nothing else to store. */
+export const NO_DATE_YET = "*";
+
+export function isPending(showDate: string): boolean {
+  return showDate === NO_DATE_YET;
+}
 
 export interface Member { id: string; name: string }
 
@@ -50,13 +58,16 @@ export function minutesSince(then: Date | null, now = new Date()): number | null
 }
 
 export function watchState(
-  sub: Pick<Subscription, "state">,
+  sub: Pick<Subscription, "state" | "showDate">,
   target: Pick<Target, "lastOutcome" | "lastCheckedAt" | "lastOkAt">,
   now = new Date(),
 ): WatchState {
   // The person's own choice outranks everything: a silenced watch is silenced
   // even while the target is blind, because they asked not to hear about it.
   if (sub.state === "acked") return "silenced";
+  // Waiting for the film to go on sale at all: no dates exist to be waiting
+  // for, so none of the other states describe it.
+  if (isPending(sub.showDate) && sub.state !== "fired") return "pending";
   if (!target.lastCheckedAt) return "new";
 
   const blindFor = minutesSince(target.lastOkAt, now);
@@ -109,7 +120,8 @@ export function nameList(members: Member[]): string {
 export function summarise(states: WatchState[]): string {
   const order: [WatchState, string][] = [
     ["on_sale", "on sale"], ["cant_read", "can't read"],
-    ["waiting", "waiting"], ["new", "new"], ["silenced", "silenced"],
+    ["waiting", "waiting"], ["new", "new"],
+    ["pending", "not on sale yet"], ["silenced", "silenced"],
   ];
   const parts = order
     .map(([s, label]) => [states.filter((x) => x === s).length, label] as const)
@@ -120,7 +132,7 @@ export function summarise(states: WatchState[]): string {
 
 /** Cards sort by urgency, not by when they were added. */
 const RANK: Record<WatchState, number> = {
-  on_sale: 0, cant_read: 1, waiting: 2, new: 3, silenced: 4,
+  on_sale: 0, cant_read: 1, waiting: 2, new: 3, pending: 4, silenced: 5,
 };
 
 export function byUrgency(a: { state: WatchState }, b: { state: WatchState }): number {

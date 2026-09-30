@@ -30,7 +30,9 @@ export function WatchHero({
   checks: CheckCell[];
   bookUrl: string;
 }) {
-  const when = dateParts(showDate);
+  const when = showDate === "*"
+    ? { short: "when it opens", long: "when booking opens", weekday: "", day: "", month: "" }
+    : dateParts(showDate);
 
   const strip = checks.length > 0 ? (
     <div className="mt-5">
@@ -146,6 +148,26 @@ export function WatchHero({
             You won&apos;t get alerts for this date. We still check it
             {friends.length > 0 ? `, and ${nameList(friends)} still get theirs` : ""}.
           </p>
+        </div>
+      </section>
+    );
+  }
+
+  if (state === "pending") {
+    return (
+      <section className="border-b-2 border-dashed border-divider">
+        <div className="mx-auto max-w-[880px] px-4 pb-5 pt-[22px]">
+          <span className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-kicker text-neutral-700">
+            <Clock size={16} strokeWidth={2.5} />Not on sale yet
+          </span>
+          <h1 className="mt-2 text-[30px] font-extrabold leading-[1] tracking-tight2">{title}</h1>
+          <p className="mt-1 text-[15px] text-neutral-700">{city}</p>
+          <p className="mt-4 text-[15px] leading-[1.5] text-neutral-800">
+            BookMyShow has no Book tickets button for this film yet, so there are no dates to
+            watch. We read the film&apos;s own page about once an hour, and the moment booking
+            opens you&apos;ll get one alert — then you choose your dates.
+          </p>
+          {strip}
         </div>
       </section>
     );
