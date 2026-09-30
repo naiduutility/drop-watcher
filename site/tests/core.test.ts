@@ -13,7 +13,7 @@ import { dirname, join } from "node:path";
 
 import { readShowtimes } from "../src/engine/index.js";
 import {
-  BASE_INTERVAL_MS, MAX_BACKOFF_MS, nextDueDelayMs, planFetches,
+  BASE_INTERVAL_MS, MAX_BACKOFF_MS, daysUntil, effectivePriority, istToday, nextDueDelayMs, planFetches,
 } from "../src/core/schedule.js";
 import {
   DEFAULT_POLICY, planEvents,
@@ -66,6 +66,46 @@ check("1 block doubles", blockedDelay(1), 4 * MINUTE);
 check("3 blocks -> 16 min", blockedDelay(3), 16 * MINUTE);
 check("never sleeps past the cap", blockedDelay(10), MAX_BACKOFF_MS);
 check("cap is under half an hour", MAX_BACKOFF_MS <= 30 * MINUTE, true);
+
+console.log("\nThe slow end of the ladder");
+check("a film months out is read twice a day, not hourly",
+  BASE_INTERVAL_MS.glacial, 24 * 60 * MINUTE);
+check("the ladder only ever gets slower",
+  (["hot", "brisk", "normal", "cold", "slow", "glacial"] as const)
+    .every((p, i, a) => i === 0 || BASE_INTERVAL_MS[a[i - 1]!] < BASE_INTERVAL_MS[p]),
+  true);
+// The cap is a ceiling, not a floor. Before this, being blocked would have
+// dragged a once-a-day watch up to every 30 minutes — backoff speeding a
+// watch up is precisely backwards, and it would have done it silently.
+check("blocks never speed a glacial watch up",
+  nextDueDelayMs({ priority: "glacial", consecutiveInconclusive: 4, now: new Date(), random: 0.5 }),
+  24 * 60 * MINUTE);
+check("blocks still slow a hot watch down",
+  nextDueDelayMs({ priority: "hot", consecutiveInconclusive: 4, now: new Date(), random: 0.5 }),
+  30 * MINUTE);
+
+console.log("\nA slow watch wakes itself up as the film approaches");
+const NOW = new Date("2026-09-30T12:00:00+05:30");
+check("months out: left exactly as chosen",
+  effectivePriority("glacial", "20261218", NOW), "glacial");
+check("a week out: hourly at worst", effectivePriority("glacial", "20261006", NOW), "cold");
+check("tomorrow: every pass", effectivePriority("glacial", "20261001", NOW), "hot");
+check("today: every pass", effectivePriority("glacial", "20260930", NOW), "hot");
+// Escalation is a floor, never a ceiling. Someone who asked for every 5
+// minutes on a film a year away chose that; it is not a mistake to correct.
+check("never slows a watch the person made fast",
+  effectivePriority("hot", "20261218", NOW), "hot");
+check("no advertised date, no escalation",
+  effectivePriority("glacial", null, NOW), "glacial");
+check("a date already past stays hot", effectivePriority("slow", "20260901", NOW), "hot");
+// 12:00Z is 17:30 IST on the 30th; 20:00Z is already 01:30 IST on the 1st.
+// Reading the host's local calendar instead would have got one of these
+// wrong on any machine that is not set to UTC.
+check("afternoon UTC is still today in IST",
+  daysUntil("20261001", new Date("2026-09-30T12:00:00Z")), 1);
+check("after 18:30 UTC, IST is already tomorrow",
+  daysUntil("20261001", new Date("2026-09-30T20:00:00Z")), 0);
+check("and istToday agrees", istToday(new Date("2026-09-30T20:00:00Z")), "20261001");
 
 console.log("\nFetch planning: ask for as little as possible");
 check("nothing armed, nothing fetched",

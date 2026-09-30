@@ -12,7 +12,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checks, subscriptions, targets } from "../db/schema.js";
 import { MovieOutcome, Outcome, readMoviePage } from "../engine/index.js";
-import { nextDueAt, type Priority } from "../core/schedule.js";
+import { effectivePriority, nextDueAt, type Priority } from "../core/schedule.js";
 import { fetchPage, type ContextProvider } from "./fetch.js";
 import { resolveBookCode } from "./resolve.js";
 
@@ -61,14 +61,17 @@ export async function checkUnresolved(
   const failures = conclusive ? 0 : target.consecutiveInconclusive + 1;
 
   if (read.outcome !== MovieOutcome.OPEN) {
-    // The cadence is the person's choice and is never overridden here. The
-    // release date is still recorded, but only so the watch can show it.
-    const priority = target.priority as Priority;
+    // The person's choice is the floor, not the ceiling: a watch set to once
+    // a day speeds up on its own as the advertised release approaches, because
+    // nobody should have to remember to come back and change it. The freshest
+    // release date wins, since this read may be the one that learned it.
+    const releaseDate = read.releaseDate ?? target.releaseDate;
+    const priority = effectivePriority(target.priority as Priority, releaseDate, now);
     await db.update(targets).set({
       lastCheckedAt: now,
       lastOkAt: conclusive ? now : target.lastOkAt,
       consecutiveInconclusive: failures,
-      releaseDate: read.releaseDate ?? target.releaseDate,
+      releaseDate,
       nextDueAt: nextDueAt({ priority, consecutiveInconclusive: failures, now }),
     }).where(eq(targets.id, target.id));
     return null;
@@ -87,7 +90,9 @@ export async function checkUnresolved(
       lastCheckedAt: now,
       consecutiveInconclusive: target.consecutiveInconclusive + 1,
       nextDueAt: nextDueAt({
-        priority: target.priority as Priority,
+        priority: effectivePriority(
+          target.priority as Priority, read.releaseDate ?? target.releaseDate, now,
+        ),
         consecutiveInconclusive: target.consecutiveInconclusive + 1, now,
       }),
     }).where(eq(targets.id, target.id));

@@ -20,7 +20,7 @@ import {
   channels, checks, notifications, subscriptions, targetDates, targets,
 } from "../db/schema.js";
 import { isConclusive, showtimesUrl, type Reading } from "../engine/index.js";
-import { nextDueAt, planFetches, type Priority } from "../core/schedule.js";
+import { effectivePriority, nextDueAt, planFetches, type Priority } from "../core/schedule.js";
 import {
   DEFAULT_POLICY, planEvents, type SubscriptionView, type WatchEvent,
 } from "../core/transitions.js";
@@ -408,7 +408,9 @@ ${bookNow}`,
         lastOkAt: conclusive ? now : target.lastOkAt,
         consecutiveInconclusive: failures,
         nextDueAt: nextDueAt({
-          priority: target.priority as Priority,
+          priority: effectivePriority(
+            target.priority as Priority, target.releaseDate, now,
+          ),
           consecutiveInconclusive: failures,
           now,
         }),

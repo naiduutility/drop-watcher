@@ -19,6 +19,7 @@
  */
 
 import { Outcome, showtimesUrl } from "../engine/index.js";
+import { istToday } from "../core/schedule.js";
 import { fetchShowtimes, sleep, type ContextProvider, PACING_MS } from "./fetch.js";
 
 export interface ResolveResult {
@@ -32,10 +33,7 @@ export interface ResolveResult {
 
 /** A date to probe with. Today in IST: whatever is on sale will include it or
  *  redirect to the first date that is, and both answers prove the code. */
-function probeDate(now = new Date()): string {
-  const ist = new Date(now.getTime() + (5.5 * 60 - now.getTimezoneOffset()) * 60_000);
-  return `${ist.getFullYear()}${String(ist.getMonth() + 1).padStart(2, "0")}${String(ist.getDate()).padStart(2, "0")}`;
-}
+const probeDate = istToday;
 
 export async function resolveBookCode(
   movieUrl: string,

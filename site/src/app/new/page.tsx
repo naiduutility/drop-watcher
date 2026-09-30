@@ -5,12 +5,30 @@ import { db } from "../../db/index.js";
 import { subscriptions, targets, users, venues } from "../../db/schema.js";
 import { currentUser } from "../../lib/auth.js";
 import { parseBmsUrl } from "../../lib/bms-url.js";
+import type { Priority } from "../../core/schedule.js";
 import type { Member } from "../../lib/view.js";
 import { AppHeader } from "../../components/AppHeader.js";
 import { AddStep1 } from "../../components/AddStep1.js";
 import { AddStep2 } from "../../components/AddStep2.js";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * The cadence ladder, in the words a person picking one actually has.
+ *
+ * Nobody knows what "normal" means, but everybody knows whether their film is
+ * out this week or next year — so the note is the real label and the interval
+ * is the detail. The order is the only thing the server trusts about this
+ * list; the value is validated against it before it reaches the scheduler.
+ */
+const CADENCES: { v: Priority; label: string; note: string }[] = [
+  { v: "hot", label: "Every 5 min", note: "a drop any day now" },
+  { v: "brisk", label: "Every 15 min", note: "out this week" },
+  { v: "normal", label: "Every 30 min", note: "a few weeks away" },
+  { v: "cold", label: "Hourly", note: "a month or two" },
+  { v: "slow", label: "Every 6 hours", note: "later this year" },
+  { v: "glacial", label: "Once a day", note: "months away" },
+];
 
 /** Parse the picker's JSON, defensively: a server action is a public endpoint
  *  and this arrives from a form field. */
@@ -83,9 +101,9 @@ export default async function New({
     "use server";
     // Chosen by the person, not inferred. A form field is public input, so an
     // unrecognised value falls back rather than reaching the scheduler.
-    function pickPriority(raw: FormDataEntryValue | null): "hot" | "normal" | "cold" {
+    function pickPriority(raw: FormDataEntryValue | null): Priority {
       const v = String(raw ?? "");
-      return v === "hot" || v === "normal" || v === "cold" ? v : "hot";
+      return (CADENCES.some((c) => c.v === v) ? v : "hot") as Priority;
     }
     const me = await currentUser();
     if (!me) return;
@@ -179,29 +197,35 @@ export default async function New({
             <span className="text-[11px] font-extrabold uppercase tracking-kicker text-neutral-700">
               How often should we look?
             </span>
-            <div className="mt-2 grid grid-cols-3 border-2 border-ink">
-              {[
-                { v: "hot", label: "Every 5 min", note: "a drop any day now" },
-                { v: "normal", label: "Every 10 min", note: "out within a fortnight" },
-                { v: "cold", label: "Hourly", note: "months away" },
-              ].map((o, i) => (
+            {/* gap-px over a dark background draws the grid lines, so the same
+                markup works at two columns on a phone and three on a wide
+                screen. Doing it with per-cell borders needs to know which
+                cells start a row, which changes with the breakpoint. */}
+            <div className="mt-2 grid grid-cols-2 gap-px border-2 border-ink bg-ink sm:grid-cols-3">
+              {CADENCES.map((o) => (
                 <label
                   key={o.v}
-                  className={`flex min-h-[64px] cursor-pointer flex-col items-center justify-center px-2 text-center ${
-                    i > 0 ? "border-l-2 border-ink" : ""
-                  } has-[:checked]:bg-ink has-[:checked]:text-bg`}
+                  title={o.note}
+                  className="flex min-h-[60px] cursor-pointer flex-col items-center justify-center bg-bg px-2 py-2 text-center has-[:checked]:bg-ink has-[:checked]:text-bg sm:min-h-[52px]"
                 >
                   <input type="radio" name="priority" value={o.v}
                          defaultChecked={o.v === "hot"} className="sr-only" />
-                  <span className="text-[15px] font-extrabold">{o.label}</span>
-                  <span className="mt-0.5 text-[11px] opacity-70">{o.note}</span>
+                  <span className="text-[15px] font-extrabold leading-tight sm:text-[14px]">
+                    {o.label}
+                  </span>
+                  <span className="mt-0.5 text-[11px] leading-tight opacity-70">{o.note}</span>
                 </label>
               ))}
             </div>
-            <p className="mt-2 text-[13px] text-neutral-700">
+            <p className="mt-2 text-[13px] leading-[1.45] text-neutral-700">
               Five minutes is as fast as the watcher runs. Slower settings exist because every
               request is one the on-sale watches need too — BookMyShow refuses roughly half of
               them as it is.
+            </p>
+            <p className="mt-1.5 text-[13px] leading-[1.45] text-neutral-700">
+              Whatever you pick, we speed up on our own as the film gets close: <strong>hourly
+              from a week out</strong>, and <strong>every 5 minutes for the last day</strong>. So
+              a slow setting costs you nothing at the moment it matters.
             </p>
 
             <label className="mt-5 block">

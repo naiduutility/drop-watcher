@@ -16,7 +16,7 @@ import { desc, gte, inArray } from "drizzle-orm";
 
 import { db } from "../src/db/index.js";
 import { checks, subscriptions, targets, users } from "../src/db/schema.js";
-import { BASE_INTERVAL_MS } from "../src/core/schedule.js";
+import { BASE_INTERVAL_MS, daysUntil, effectivePriority } from "../src/core/schedule.js";
 import { WHOLE_DATE } from "../src/lib/alertkeys.js";
 
 function mins(from: Date | null, now: Date): string {
@@ -75,7 +75,14 @@ async function main() {
     console.log(`  narrowed to  ${narrowing}`);
     console.log(`  subscription ${sub.state}${sub.ackedKeys.length ? ` · silenced: ${sub.ackedKeys.join(", ")}` : ""}`);
     console.log(`  announced    ${sub.notifiedKeys.length ? sub.notifiedKeys.join(", ") : "nothing yet"}`);
-    console.log(`  target       ${t.status} · ${t.priority} (every ${Math.round(BASE_INTERVAL_MS[t.priority] / 60_000)} min)`);
+    const actual = effectivePriority(t.priority, t.releaseDate, now);
+    const every = (p: typeof actual) => {
+      const m = Math.round(BASE_INTERVAL_MS[p] / 60_000);
+      return m >= 60 ? `every ${Math.round(m / 60)}h` : `every ${m} min`;
+    };
+    const days = daysUntil(t.releaseDate, now);
+    console.log(`  target       ${t.status} · ${t.priority} (${every(t.priority)})`
+      + (actual !== t.priority ? `  -> sped up to ${actual} (${every(actual)}), ${days}d to release` : ""));
     console.log(`  booking code ${t.bookCode || "NOT RESOLVED YET — watching the film page"}`);
     console.log(`  last read    ${t.lastOutcome ?? "none"} ${mins(t.lastCheckedAt, now)}`
       + ` · last clean ${mins(t.lastOkAt, now)}`

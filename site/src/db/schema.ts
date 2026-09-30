@@ -105,9 +105,12 @@ export const targets = pgTable("targets", {
 
   status: text("status").$type<"active" | "unresolved" | "retired">()
     .notNull().default("active"),
-  /** Poll cadence class. A premiere expected tonight is "hot"; a release three
-   *  weeks out is "cold". Set by the site, used by the scheduler. */
-  priority: text("priority").$type<"hot" | "normal" | "cold">()
+  /** Poll cadence class, chosen by the person who made the watch. A premiere
+   *  expected tonight is "hot"; a film announced for next year is "glacial".
+   *  The scheduler may poll FASTER than this as the release date nears, but
+   *  never slower — see effectivePriority. */
+  priority: text("priority")
+    .$type<"hot" | "brisk" | "normal" | "cold" | "slow" | "glacial">()
     .notNull().default("normal"),
 
   nextDueAt: timestamp("next_due_at", { withTimezone: true }).notNull().defaultNow(),
