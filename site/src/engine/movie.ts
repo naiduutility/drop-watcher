@@ -33,6 +33,10 @@ export type MovieOutcome = (typeof MovieOutcome)[keyof typeof MovieOutcome];
 
 export interface MovieRead {
   outcome: MovieOutcome;
+  /** "Releasing on 18 Dec, 2026" as YYYYMMDD, when the page says so. How
+   *  close that is decides how often the film is worth checking: a release
+   *  tomorrow deserves every pass, one in December does not. */
+  releaseDate: string | null;
   /** ET codes found on the page, best guess first. The booking code is often
    *  NOT the one in the page URL — The Paradise's page was ET00518274 while
    *  its showtimes needed ET00518514 — so these are candidates to be PROVEN,
@@ -42,6 +46,23 @@ export interface MovieRead {
 }
 
 const ET_RE = /ET\d{6,}/g;
+const RELEASING_RE =
+  /releasing on\s+(\d{1,2})\s+([a-z]{3,})[,\s]+(\d{4})/i;
+const MONTHS = [
+  "jan", "feb", "mar", "apr", "may", "jun",
+  "jul", "aug", "sep", "oct", "nov", "dec",
+];
+
+/** The advertised release date, if the page states one. */
+export function releaseDateFrom(text: string): string | null {
+  const m = text.match(RELEASING_RE);
+  if (!m) return null;
+  const month = MONTHS.indexOf(m[2]!.slice(0, 3).toLowerCase());
+  if (month < 0) return null;
+  const day = Number(m[1]);
+  if (!Number.isFinite(day) || day < 1 || day > 31) return null;
+  return `${m[3]}${String(month + 1).padStart(2, "0")}${String(day).padStart(2, "0")}`;
+}
 const PHASE_RE = /data-phase\s*=\s*"([^"]+)"/gi;
 
 /**
@@ -59,23 +80,24 @@ export function readMoviePage(
   const { bodyText = "", httpStatus = 200, pageCode = null } = opts;
 
   if (httpStatus >= 400) {
-    return { outcome: MovieOutcome.BLOCKED, candidates: [], detail: `HTTP ${httpStatus}` };
+    return { outcome: MovieOutcome.BLOCKED, candidates: [], releaseDate: null, detail: `HTTP ${httpStatus}` };
   }
   if (looksBlocked(bodyText)) {
-    return { outcome: MovieOutcome.BLOCKED, candidates: [], detail: "anti-bot markers" };
+    return { outcome: MovieOutcome.BLOCKED, candidates: [], releaseDate: null, detail: "anti-bot markers" };
   }
   if (bodyText && bodyText.length < MIN_BODY) {
     return {
       outcome: MovieOutcome.BLOCKED,
       candidates: [],
+      releaseDate: null,
       detail: `rendered body only ${bodyText.length} chars`,
     };
   }
   if (looksLikePageError(bodyText)) {
-    return { outcome: MovieOutcome.UNPARSEABLE, candidates: [], detail: "BMS error page" };
+    return { outcome: MovieOutcome.UNPARSEABLE, candidates: [], releaseDate: null, detail: "BMS error page" };
   }
   if (!html || html.length < 1000) {
-    return { outcome: MovieOutcome.UNPARSEABLE, candidates: [], detail: "page too short to read" };
+    return { outcome: MovieOutcome.UNPARSEABLE, candidates: [], releaseDate: null, detail: "page too short to read" };
   }
 
   const phases = [...html.matchAll(PHASE_RE)].map((m) => m[1]!.toLowerCase());
@@ -88,10 +110,13 @@ export function readMoviePage(
   const low = bodyText.toLowerCase();
   const byText = low.includes("book tickets") || low.includes("book now");
 
+  const releaseDate = releaseDateFrom(bodyText || html);
+
   if (!byPhase && !byText) {
     return {
       outcome: MovieOutcome.NOT_OPEN,
       candidates: [],
+      releaseDate,
       detail: phases.length ? `cta phase: ${phases.join(", ")}` : "no booking CTA",
     };
   }
@@ -113,6 +138,7 @@ export function readMoviePage(
   return {
     outcome: MovieOutcome.OPEN,
     candidates: candidates.slice(0, 8),
+    releaseDate,
     detail: byPhase ? "cta phase postRelease" : "cta text says book tickets",
   };
 }

@@ -11,7 +11,8 @@
  * data-phase="postRelease"; a pre-release page does not render it at all.
  */
 
-import { MovieOutcome, readMoviePage } from "../src/engine/movie.js";
+import { MovieOutcome, readMoviePage, releaseDateFrom } from "../src/engine/movie.js";
+import { priorityForRelease } from "../src/core/schedule.js";
 
 const CHROME = "Drop Watcher sample page. ".repeat(60); // > 500 chars of body
 
@@ -96,6 +97,23 @@ check("too short to read", readMoviePage("<html></html>", { bodyText: CHROME }).
 check("BMS's own error page", readMoviePage(page("<h1>x</h1>"), {
   bodyText: "Oops! Something went wrong " + CHROME,
 }).outcome, MovieOutcome.UNPARSEABLE);
+
+console.log("\nRelease date decides how often we look");
+check("day, short month, comma", releaseDateFrom("Releasing on 25 Sep, 2026"), "20260925");
+check("no comma", releaseDateFrom("Releasing on 18 Dec 2026"), "20261218");
+check("single digit day", releaseDateFrom("releasing on 1 Oct, 2026"), "20261001");
+check("buried in other text",
+  releaseDateFrom("Doomsday · Releasing on 09 Jan, 2027 · Action"), "20270109");
+check("absent", releaseDateFrom("no date here"), null);
+check("nonsense month", releaseDateFrom("Releasing on 32 Foo, 2026"), null);
+
+const TODAY = new Date(2026, 8, 30);
+check("out tomorrow: every pass", priorityForRelease("20261001", TODAY), "hot");
+check("out today", priorityForRelease("20260930", TODAY), "hot");
+check("already out, still no booking", priorityForRelease("20260925", TODAY), "hot");
+check("next week", priorityForRelease("20261007", TODAY), "normal");
+check("December", priorityForRelease("20261218", TODAY), "cold");
+check("unknown date errs eager, not lazy", priorityForRelease(null, TODAY), "normal");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

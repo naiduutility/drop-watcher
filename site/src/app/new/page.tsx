@@ -91,9 +91,9 @@ export default async function New({
       title: String(form.get("title") ?? "").trim() || p.slug.replace(/-/g, " "),
       movieUrl: p.movieUrl, pageCode: p.pageCode, bookCode: "",
       language: null, status: "unresolved",
-      // A release months away does not need checking every few minutes, and
-      // every request spends a budget the on-sale watches need more.
-      priority: "cold", createdBy: me.id,
+      // Starts eager and is re-rated from the film page's own release date on
+      // the first read: a film out tomorrow ends up hot, one in December cold.
+      priority: "normal", createdBy: me.id,
     }).onConflictDoUpdate({
       target: [targets.city, targets.bookCode, targets.language],
       set: { status: "unresolved" },
@@ -188,8 +188,9 @@ export default async function New({
             </button>
           </form>
           <p className="mt-4 text-[13px] text-neutral-700">
-            Checked about hourly until it opens — a release months away doesn&apos;t need more,
-            and every request is one the on-sale watches need more than this.
+            How often we look follows the release date on BookMyShow: every few minutes when
+            it&apos;s days away, hourly when it&apos;s months off. It speeds itself up as the
+            date approaches.
           </p>
         </main>
       </>

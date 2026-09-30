@@ -99,6 +99,9 @@ export const targets = pgTable("targets", {
   /** The ET code the /buytickets/ path needs. Often different. */
   bookCode: text("book_code").notNull(),
   language: text("language"),
+  /** YYYYMMDD the film page advertises, when it does. Drives how often an
+   *  unreleased film is checked. */
+  releaseDate: text("release_date"),
 
   status: text("status").$type<"active" | "unresolved" | "retired">()
     .notNull().default("active"),
