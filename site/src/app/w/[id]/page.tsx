@@ -239,6 +239,7 @@ export default async function WatchDetail({ params }: { params: { id: string } }
           />
           <button
             type="submit"
+            title="Save which cinemas and screens this watch alerts you about"
             className="mt-3 flex min-h-[48px] w-full items-center justify-center border-2 border-divider px-4 text-[15px] font-extrabold"
           >
             Save cinemas
@@ -296,7 +297,9 @@ export default async function WatchDetail({ params }: { params: { id: string } }
                       {screen && screen !== "*" ? screen : k.split("|")[0]?.toUpperCase()}
                     </span>
                     <form action={`/s/${params.id}/unack?k=${encodeURIComponent(k)}`} method="post">
-                      <button type="submit" className="min-h-[44px] text-[15px] font-extrabold text-accent-700">
+                      <button type="submit"
+                        title="Un-silence this one screen. The rest of the watch is unaffected."
+                        className="min-h-[44px] text-[15px] font-extrabold text-accent-700">
                         Watch it again
                       </button>
                     </form>
@@ -311,6 +314,7 @@ export default async function WatchDetail({ params }: { params: { id: string } }
           <form action={watchAgain}>
             <button
               type="submit"
+              title="Turn your alerts for this date back on. Only you are affected."
               className="flex min-h-[56px] w-full items-center justify-between bg-accent-600 px-4 text-[17px] font-extrabold text-white"
             >
               <span>Watch again</span>
@@ -328,6 +332,7 @@ export default async function WatchDetail({ params }: { params: { id: string } }
             <form action={silence}>
               <button
                 type="submit"
+                title="Stop your own alerts for this date. Friends watching it keep theirs, and you can undo it."
                 className="flex min-h-[48px] items-center gap-2 border-2 border-divider px-3.5 text-[15px] font-extrabold"
               >
                 <BellOff size={18} strokeWidth={2.5} />

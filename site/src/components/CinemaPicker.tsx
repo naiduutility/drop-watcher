@@ -97,6 +97,9 @@ export function CinemaPicker({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
+        title={open
+          ? "Close this"
+          : "Narrow the watch to certain cinemas or screens. Leave it alone to watch every cinema in the city."}
         className="flex min-h-[56px] w-full items-center justify-between gap-3 py-3 text-left"
       >
         <span className="flex min-w-0 flex-col gap-0.5">
@@ -141,6 +144,7 @@ export function CinemaPicker({
                   <div className="mt-2 flex flex-wrap gap-2">
                     {anyCinemaFormats.map((s) => (
                       <button key={s} type="button" onClick={() => toggleGlobalScreen(s)}
+                              title={`Alert me only when ${s} goes on sale, at any cinema that has it`}
                               className={chip(screens.includes(s))}>
                         {s}
                       </button>
@@ -165,6 +169,7 @@ export function CinemaPicker({
                         type="button"
                         onClick={() => toggleCinema(c.code)}
                         aria-pressed={on}
+                        title={on ? `Stop watching ${c.name}` : `Watch ${c.name}`}
                         className="flex min-h-[56px] w-full items-center gap-3 py-2 text-left"
                       >
                         <span className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center border-2 ${
@@ -201,6 +206,7 @@ export function CinemaPicker({
                                 {formats.map((s) => (
                                   <button key={s} type="button"
                                           onClick={() => toggleCinemaScreen(c.code, s)}
+                                          title={`Alert me only for ${s} at ${c.name}`}
                                           className={chip(pick!.screens.includes(s))}>
                                     {s}
                                   </button>
@@ -223,6 +229,7 @@ export function CinemaPicker({
                 <button
                   type="button"
                   onClick={() => { setPicks([]); setScreens([]); }}
+                  title="Clear every pick and go back to watching the whole city"
                   className="mt-3 min-h-[44px] text-[15px] font-extrabold text-accent-700 underline"
                 >
                   Back to any cinema

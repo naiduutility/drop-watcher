@@ -64,6 +64,7 @@ export function JoinForm({ action }: { action: (form: FormData) => void }) {
         <div className="mx-auto w-full max-w-[640px]">
           <button
             type="submit"
+            title="Create your account and sign this device in"
             disabled={!ready || busy}
             className="flex min-h-[54px] w-full items-center justify-between bg-accent-600 px-4 text-[17px] font-extrabold text-white transition-transform duration-75 active:scale-[.98] disabled:opacity-45"
           >

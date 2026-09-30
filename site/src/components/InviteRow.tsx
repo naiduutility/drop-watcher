@@ -54,6 +54,7 @@ export function InviteRow({
           type="button"
           onClick={() => setShown((v) => !v)}
           aria-label={shown ? "Hide the link" : "Reveal the link"}
+          title={shown ? "Hide it again" : "Show the full invite link"}
           className="flex h-11 w-11 shrink-0 items-center justify-center text-neutral-700"
         >
           {shown ? <EyeOff size={18} strokeWidth={2.5} /> : <Eye size={18} strokeWidth={2.5} />}
@@ -64,6 +65,7 @@ export function InviteRow({
         <button
           type="button"
           onClick={copy}
+          title="Copy the invite link to send however you like"
           className={`flex min-h-[48px] items-center justify-between border-2 px-3.5 text-[15px] font-extrabold transition-colors duration-150 ${
             copied ? "border-ink bg-ink text-bg" : "border-divider text-ink"
           }`}
@@ -74,6 +76,7 @@ export function InviteRow({
         <button
           type="button"
           onClick={share}
+          title="Send this invite through WhatsApp or your share menu"
           className="flex min-h-[48px] items-center justify-between bg-accent-600 px-3.5 text-[15px] font-extrabold text-white"
         >
           <span>Share</span>

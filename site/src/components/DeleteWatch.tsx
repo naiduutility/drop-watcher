@@ -21,6 +21,7 @@ export function DeleteWatch({
       <button
         type="button"
         onClick={() => setAsking(true)}
+        title="Stop watching this date. Friends watching it keep their alerts."
         className="mt-6 flex min-h-[44px] items-center gap-2 text-[15px] font-extrabold text-accent-700"
       >
         <Trash size={18} strokeWidth={2.5} />
@@ -44,6 +45,7 @@ export function DeleteWatch({
         <form action={action}>
           <button
             type="submit"
+            title="Delete your watch for this date"
             className="flex min-h-[48px] w-full items-center justify-center bg-accent-600 px-3 text-[15px] font-extrabold text-white"
           >
             Delete mine
@@ -52,6 +54,7 @@ export function DeleteWatch({
         <button
           type="button"
           onClick={() => setAsking(false)}
+          title="Leave the watch alone"
           className="flex min-h-[48px] w-full items-center justify-center border-2 border-divider px-3 text-[15px] font-extrabold"
         >
           Keep it

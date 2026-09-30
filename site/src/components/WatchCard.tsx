@@ -41,7 +41,8 @@ export function WatchCard({ watch }: { watch: WatchView }) {
         <DateColumn date={watch.showDate} rule="border-white/45" />
         <div className="flex flex-col gap-2.5 p-3.5">
           <div className={KICKER}><Ticket size={16} strokeWidth={2.5} /><span>On sale now</span></div>
-          <Link href={href} className="flex flex-col gap-0.5 text-white no-underline">
+          <Link href={href} title={`Open ${watch.title} — the cinemas, screens and dates you picked`}
+            className="flex flex-col gap-0.5 text-white no-underline">
             <span className="text-xl font-extrabold leading-[1.1] tracking-tight1">{watch.title}</span>
             <span className="text-sm font-semibold">
               {watch.city} · {watch.venuesListed ?? 0} cinemas listed
@@ -49,6 +50,7 @@ export function WatchCard({ watch }: { watch: WatchView }) {
           </Link>
           <a
             href={watch.bookUrl}
+            title="Open this date's showtimes on BookMyShow and book"
             className="flex min-h-[48px] items-center justify-between bg-white px-3.5 text-base font-extrabold text-onred no-underline transition-transform duration-75 active:scale-[.98]"
           >
             <span>Book on BookMyShow</span>
@@ -77,7 +79,8 @@ export function WatchCard({ watch }: { watch: WatchView }) {
               <EyeOff size={16} strokeWidth={2.5} />
               <span>Can&apos;t read · {mins ?? "?"} min</span>
             </div>
-            <Link href={href} className="flex flex-col gap-1 text-hazard-fg no-underline">
+            <Link href={href} title={`Open ${watch.title} — the cinemas, screens and dates you picked`}
+              className="flex flex-col gap-1 text-hazard-fg no-underline">
               <span className="text-xl font-extrabold leading-[1.1] tracking-tight1">{watch.title}</span>
               <span className="text-sm leading-[1.4]">
                 No clean read for {mins ?? "?"} minutes. We can&apos;t tell you whether tickets are out.
@@ -85,6 +88,7 @@ export function WatchCard({ watch }: { watch: WatchView }) {
             </Link>
             <a
               href={watch.bookUrl}
+              title="We can't read BookMyShow right now — open it yourself and look"
               className="flex min-h-[44px] items-center justify-between border-2 border-[#f3f2f2] px-3.5 text-[15px] font-extrabold text-hazard-fg no-underline hover:bg-[#f3f2f2]/10"
             >
               <span>Check BookMyShow yourself</span>
@@ -102,13 +106,15 @@ export function WatchCard({ watch }: { watch: WatchView }) {
         <DateColumn date={watch.showDate} rule="border-neutral-300" />
         <div className="flex flex-col gap-2 p-3.5">
           <div className={KICKER}><BellOff size={16} strokeWidth={2.5} /><span>Silenced · no alerts</span></div>
-          <Link href={href} className="flex flex-col gap-0.5 text-neutral-700 no-underline">
+          <Link href={href} title={`Open ${watch.title} — the cinemas, screens and dates you picked`}
+            className="flex flex-col gap-0.5 text-neutral-700 no-underline">
             <span className="text-lg font-extrabold leading-[1.15] tracking-tight1">{watch.title}</span>
             <span className="text-sm">{watch.city}</span>
           </Link>
           <form action={`/s/${watch.id}/unack`} method="post">
             <button
               type="submit"
+              title="Turn alerts back on for this date. You'll be told again if a new screen opens."
               className="flex min-h-[44px] w-full items-center justify-between border-2 border-neutral-300 px-3.5 text-[15px] font-extrabold text-ink"
             >
               <span>Watch again</span>
@@ -127,7 +133,8 @@ export function WatchCard({ watch }: { watch: WatchView }) {
           <Hourglass size={16} strokeWidth={2.5} />
           <span>Not on sale yet</span>
         </div>
-        <Link href={href} className="mt-2 flex flex-col gap-0.5 text-ink no-underline">
+        <Link href={href} title={`Open ${watch.title} — the cinemas, screens and dates you picked`}
+          className="mt-2 flex flex-col gap-0.5 text-ink no-underline">
           <span className="text-lg font-extrabold leading-[1.15] tracking-tight1">{watch.title}</span>
           <span className="text-sm text-neutral-700">{watch.city}</span>
         </Link>
@@ -148,7 +155,8 @@ export function WatchCard({ watch }: { watch: WatchView }) {
             <LoaderCircle size={16} strokeWidth={2.5} className="animate-spin1s" />
             <span>First check pending · a few minutes</span>
           </div>
-          <Link href={href} className="flex flex-col gap-0.5 text-ink no-underline">
+          <Link href={href} title={`Open ${watch.title} — the cinemas, screens and dates you picked`}
+            className="flex flex-col gap-0.5 text-ink no-underline">
             <span className="text-lg font-extrabold leading-[1.15] tracking-tight1">{watch.title}</span>
             <span className="text-sm text-neutral-700">{watch.city}</span>
           </Link>
@@ -162,7 +170,8 @@ export function WatchCard({ watch }: { watch: WatchView }) {
       <DateColumn date={watch.showDate} rule="border-divider" />
       <div className="flex flex-col gap-2 p-3.5">
         <div className={KICKER}><Clock size={16} strokeWidth={2.5} /><span>Waiting · not on sale yet</span></div>
-        <Link href={href} className="flex flex-col gap-0.5 text-ink no-underline">
+        <Link href={href} title={`Open ${watch.title} — the cinemas, screens and dates you picked`}
+          className="flex flex-col gap-0.5 text-ink no-underline">
           <span className="text-lg font-extrabold leading-[1.15] tracking-tight1">{watch.title}</span>
           <span className="text-sm text-neutral-800">{watch.city}</span>
         </Link>

@@ -105,6 +105,7 @@ export default async function Pair({ params }: { params: { code: string } }) {
           <form action={confirm}>
             <button
               type="submit"
+              title="Sign this browser in, so your watches and alerts work here too"
               className="flex min-h-[58px] w-full items-center justify-between bg-accent-600 px-4 text-[17px] font-extrabold text-white transition-transform duration-75 active:scale-[.98]"
             >
               <span>Yes, sign me in</span>
@@ -113,6 +114,7 @@ export default async function Pair({ params }: { params: { code: string } }) {
           </form>
           <Link
             href="/"
+            title="Don't sign in — leave this browser as it is"
             className="mt-2 flex min-h-[44px] items-center justify-center text-[15px] font-extrabold text-neutral-700 no-underline"
           >
             I&apos;m not {who}

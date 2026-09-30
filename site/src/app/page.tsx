@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
-import { ArrowUpRight, Bell, Plus } from "lucide-react";
+import { ArrowUpRight, Bell, Plus, Smartphone } from "lucide-react";
 
 import { currentUser } from "../lib/auth.js";
 import { db } from "../db/index.js";
@@ -16,6 +16,7 @@ import { CopyField } from "../components/CopyField.js";
 import { HealthBanner } from "../components/HealthBanner.js";
 import { StickyAction } from "../components/StickyAction.js";
 import { WatchCard } from "../components/WatchCard.js";
+import { AlreadyAMember } from "../components/AlreadyAMember.js";
 import { listedButNotMine } from "../lib/narrowing.js";
 
 export const dynamic = "force-dynamic";
@@ -76,8 +77,9 @@ export default async function Home({
             date goes on sale — including a premiere that isn&apos;t listed yet.
           </p>
           <p className="mt-6 border-t-2 border-divider pt-4 text-[15px] text-neutral-700">
-            You need an invite link to use this.
+            New here? You need an invite link from whoever runs this.
           </p>
+          <AlreadyAMember />
         </main>
       </>
     );
@@ -210,6 +212,7 @@ export default async function Home({
                     is installed. */}
                 <a
                   href={`https://ntfy.sh/${topic}`}
+                  title="Open your topic in the ntfy app, where you can subscribe to it"
                   className="mt-2 flex min-h-[44px] items-center justify-between border-2 border-divider px-3.5 text-[15px] font-extrabold text-ink no-underline"
                 >
                   <span>Open this topic in ntfy</span>
@@ -223,6 +226,7 @@ export default async function Home({
                 <form action={sendTest}>
                   <button
                     type="submit"
+                    title="Send a notification to your topic right now, to prove it arrives"
                     className="mt-2 flex min-h-[44px] w-full items-center justify-between border-2 border-ink px-3.5 text-[15px] font-extrabold"
                   >
                     <span>Send me a test alert</span>
@@ -246,6 +250,17 @@ export default async function Home({
                 </p>
               </li>
             </ol>
+            <Link
+              href="/devices/new"
+              title="Show a code that signs another phone or browser in as you"
+              className="mt-3 flex min-h-[48px] items-center justify-between gap-3 border-2 border-divider px-3.5 text-[15px] font-extrabold text-ink no-underline"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <Smartphone size={18} strokeWidth={2.5} className="shrink-0" />
+                <span className="truncate">Use Drop Watcher on another device</span>
+              </span>
+              <ArrowUpRight size={18} strokeWidth={2.5} className="shrink-0" />
+            </Link>
           </section>
         ) : (
           <>
@@ -268,6 +283,7 @@ export default async function Home({
                 <a
                   href={`https://ntfy.sh/${topic}`}
                   aria-label="Open this topic in ntfy"
+                  title="Open your topic in the ntfy app"
                   className="flex h-11 w-11 items-center justify-center border-2 border-divider text-ink no-underline"
                 >
                   <ArrowUpRight size={18} strokeWidth={2.5} />
@@ -276,7 +292,7 @@ export default async function Home({
                   <button
                     type="submit"
                     aria-label="Send me a test alert"
-                    title="Send me a test alert"
+                    title="Send a notification to your topic right now, to prove it arrives"
                     className="flex h-11 w-11 items-center justify-center border-2 border-divider text-ink"
                   >
                     <Bell size={18} strokeWidth={2.5} />
@@ -284,6 +300,17 @@ export default async function Home({
                 </form>
               </span>
             </div>
+            <Link
+              href="/devices/new"
+              title="Show a code that signs another phone or browser in as you"
+              className="mt-3 flex min-h-[48px] items-center justify-between gap-3 border-2 border-divider px-3.5 text-[15px] font-extrabold text-ink no-underline"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <Smartphone size={18} strokeWidth={2.5} className="shrink-0" />
+                <span className="truncate">Use Drop Watcher on another device</span>
+              </span>
+              <ArrowUpRight size={18} strokeWidth={2.5} className="shrink-0" />
+            </Link>
           </>
         )}
       </main>
@@ -291,6 +318,7 @@ export default async function Home({
       <StickyAction>
         <Link
           href="/new"
+          title="Watch a new film — paste a BookMyShow link and pick your dates"
           className="flex min-h-[54px] items-center justify-between bg-accent-600 px-4 text-[17px] font-extrabold text-white no-underline transition-transform duration-75 active:scale-[.98]"
         >
           <span>Add a watch</span>

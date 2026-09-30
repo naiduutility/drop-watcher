@@ -20,12 +20,12 @@ export function AppHeader({
     <header className="sticky top-0 z-20 border-b-2 border-divider bg-bg">
       <div className="mx-auto flex h-14 max-w-[1120px] items-center justify-between gap-3 px-4">
         {back ? (
-          <Link href={back.href} className="flex items-center gap-2 text-[15px] font-extrabold text-ink no-underline">
+          <Link href={back.href} title={`Back to ${back.label}`} className="flex items-center gap-2 text-[15px] font-extrabold text-ink no-underline">
             <ArrowLeft size={18} strokeWidth={2.5} />
             <span>{back.label}</span>
           </Link>
         ) : (
-          <Link href="/" className="flex items-center gap-2.5 text-ink no-underline">
+          <Link href="/" title="All your watches" className="flex items-center gap-2.5 text-ink no-underline">
             <span className="flex h-[26px] w-[26px] items-center justify-center bg-accent">
               <Ticket size={16} strokeWidth={2.5} className="text-white" />
             </span>
@@ -39,19 +39,25 @@ export function AppHeader({
             <Link
               href="/admin/invites"
               aria-label="Invites"
-              title="Invites"
+              title="Make and share invite links (only you can see this)"
               className="flex h-11 w-11 items-center justify-center text-ink no-underline"
             >
               <UserPlus size={20} strokeWidth={2.5} />
             </Link>
           ) : null}
           {devices ? (
+            /* A bare phone icon read as "phone settings", not "sign this
+               phone in too" — and on a touch screen there is no hover to
+               explain it. So the words ride along wherever there is room, and
+               the home screen carries a full sentence for when there isn't. */
             <Link
               href="/devices/new"
-              aria-label="Add a device"
-              className="flex h-11 w-11 items-center justify-center text-ink no-underline"
+              aria-label="Add a device — sign in on another phone or browser"
+              title="Add a device — sign in on another phone or browser"
+              className="flex h-11 items-center justify-center gap-1.5 px-2 text-[15px] font-extrabold text-ink no-underline sm:border-2 sm:border-divider sm:px-3"
             >
               <Smartphone size={20} strokeWidth={2.5} />
+              <span className="hidden sm:inline">Add device</span>
             </Link>
           ) : null}
           {initial ? (

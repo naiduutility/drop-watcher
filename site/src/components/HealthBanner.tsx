@@ -53,6 +53,7 @@ export function HealthBanner({
         </p>
         <a
           href="https://in.bookmyshow.com"
+          title="We can't read BookMyShow right now — open it and look for yourself"
           className="flex min-h-[52px] items-center justify-between border-2 border-[#f3f2f2] px-4 text-base font-extrabold text-hazard-fg no-underline hover:bg-[#f3f2f2]/10"
         >
           <span>Check BookMyShow yourself</span>

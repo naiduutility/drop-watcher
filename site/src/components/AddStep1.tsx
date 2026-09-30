@@ -58,6 +58,7 @@ export function AddStep1({ initial = "" }: { initial?: string }) {
           <button
             type="button"
             onClick={paste}
+            title="Paste the BookMyShow link you copied"
             className="flex shrink-0 items-center gap-2 border-l-2 border-inherit px-3.5 text-[15px] font-extrabold"
           >
             <ClipboardPaste size={18} strokeWidth={2.5} />
@@ -147,6 +148,9 @@ export function AddStep1({ initial = "" }: { initial?: string }) {
         <div className="mx-auto w-full max-w-[720px]">
         <button
           type="submit"
+          title={kind === "movie"
+            ? "Booking hasn't opened for this film. We'll watch its page and tell you the moment it does."
+            : "Next: choose which dates to watch"}
           disabled={kind !== "showtimes" && kind !== "movie"}
           className="flex min-h-[54px] w-full items-center justify-between bg-accent-600 px-4 text-[17px] font-extrabold text-white transition-transform duration-75 active:scale-[.98] disabled:opacity-45"
         >

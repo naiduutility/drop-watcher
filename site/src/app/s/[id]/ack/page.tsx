@@ -7,6 +7,7 @@ import { subscriptions, targets } from "../../../../db/schema.js";
 import { currentUserId } from "../../../../lib/auth.js";
 import { dateParts } from "../../../../lib/view.js";
 import { AppHeader } from "../../../../components/AppHeader.js";
+import { AlreadyAMember } from "../../../../components/AlreadyAMember.js";
 
 export const dynamic = "force-dynamic";
 
@@ -38,15 +39,9 @@ export default async function Ack({
             This phone isn&apos;t signed in.
           </h1>
           <p className="mt-4 text-[17px] leading-[1.5] text-neutral-800">
-            So nothing was silenced, and your alerts for this date are still on. Pair this phone
-            from one that&apos;s signed in, then tap the notification again.
+            So nothing was silenced, and your alerts for this date are still on.
           </p>
-          <Link
-            href="/devices/new"
-            className="mt-6 flex min-h-[54px] items-center justify-between bg-accent-600 px-4 text-[17px] font-extrabold text-white no-underline"
-          >
-            <span>How to pair this phone</span>
-          </Link>
+          <AlreadyAMember />
         </main>
       </>
     );
@@ -143,6 +138,9 @@ export default async function Ack({
           <form action={undoHref} method="post">
             <button
               type="submit"
+              title={already
+                ? "Turn alerts back on for this screen and date"
+                : "You didn't mean to silence it — turn the alerts straight back on"}
               className="flex min-h-[64px] w-full items-center justify-between bg-ink px-4 text-xl font-extrabold text-bg transition-transform duration-75 active:scale-[.98]"
             >
               <span>{already ? "Watch again" : "Undo"}</span>
@@ -151,6 +149,7 @@ export default async function Ack({
           </form>
           <Link
             href="/"
+            title="Every film and date you're watching"
             className="mt-2 flex min-h-[44px] items-center justify-center text-[15px] font-extrabold text-neutral-700 no-underline"
           >
             See all your watches

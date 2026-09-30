@@ -121,6 +121,7 @@ export function AddStep2({
                 type="button"
                 onClick={() => toggle(d)}
                 aria-pressed={on}
+                title={on ? "Don't watch this date" : "Watch this date"}
                 className={`${base} ${look}`}
               >
                 <span className="text-[10px] font-semibold uppercase tracking-[.08em]">{weekday}</span>
@@ -141,6 +142,7 @@ export function AddStep2({
             </p>
             <a
               href={`/w/${alreadyMine[refused]}`}
+              title="Open the watch you already have for this date"
               className="mt-2 flex min-h-[44px] items-center justify-between border-2 border-divider px-3 text-[15px] font-extrabold text-ink no-underline"
             >
               <span>Open it</span>
@@ -196,6 +198,7 @@ export function AddStep2({
         </p>
         <button
           type="submit"
+          title="Start watching. We check BookMyShow for you and alert you the moment these dates go on sale."
           disabled={picked.length === 0 || busy}
           className="flex min-h-[54px] w-full items-center justify-between bg-accent-600 px-4 text-[17px] font-extrabold text-white transition-transform duration-75 active:scale-[.98] disabled:opacity-45"
         >

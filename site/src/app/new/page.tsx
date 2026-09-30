@@ -216,6 +216,7 @@ export default async function New({
             </label>
             <button
               type="submit"
+              title="Watch the film's page. The moment booking opens we take the first day and alert you."
               className="mt-4 flex min-h-[54px] w-full items-center justify-between bg-accent-600 px-4 text-[17px] font-extrabold text-white"
             >
               <span>Tell me when booking opens</span>

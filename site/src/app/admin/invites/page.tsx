@@ -117,6 +117,7 @@ export default async function AdminInvites() {
             </div>
             <button
               type="submit"
+              title="Make a one-time link that signs one person up. It expires, and works only once."
               className="mt-3 flex min-h-[54px] w-full items-center justify-between bg-accent-600 px-4 text-[17px] font-extrabold text-white transition-transform duration-75 active:scale-[.98]"
             >
               <span>Create invite link</span>

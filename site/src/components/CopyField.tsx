@@ -39,6 +39,7 @@ export function CopyField({
         type="button"
         onClick={copy}
         aria-live="polite"
+        title="Copy to the clipboard"
         className={`flex shrink-0 items-center gap-2 px-4 text-[15px] font-extrabold transition-colors duration-150 ${
           copied ? "bg-ink text-bg" : "bg-accent-600 text-white"
         }`}

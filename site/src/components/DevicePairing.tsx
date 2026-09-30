@@ -81,6 +81,7 @@ export function DevicePairing({
           <button
             type="button"
             onClick={copy}
+            title="Copy the pairing link — it signs in whoever opens it, so send it only to yourself"
             className={`flex shrink-0 items-center gap-2 px-4 text-[15px] font-extrabold transition-colors duration-150 ${
               copied ? "bg-ink text-bg" : "bg-accent-600 text-white"
             }`}

@@ -55,6 +55,7 @@ export function NotYourScreen({
               <form action={() => widen(m.code)}>
                 <button
                   type="submit"
+                  title={`Widen this watch to every screen at ${m.name.split(":")[0]!.trim()}, not just the ones you picked`}
                   className="mt-2 flex min-h-[44px] w-full items-center justify-between border-2 border-divider px-3.5 text-[15px] font-extrabold"
                 >
                   <span>Watch any screen at {m.name.split(":")[0]!.trim()}</span>
@@ -65,6 +66,7 @@ export function NotYourScreen({
         </ul>
         <a
           href={bookUrl}
+          title="Open this date on BookMyShow and see what's listed"
           className="mt-2 flex min-h-[48px] items-center justify-between bg-accent-600 px-4 text-[15px] font-extrabold text-white no-underline"
         >
           <span>See it on BookMyShow</span>

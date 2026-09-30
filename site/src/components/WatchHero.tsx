@@ -82,6 +82,7 @@ export function WatchHero({
 
           <a
             href={bookUrl}
+            title="Open this date's showtimes on BookMyShow and book"
             className="flex min-h-[60px] items-center justify-between bg-white px-4 text-[19px] font-extrabold text-onred no-underline transition-transform duration-75 active:scale-[.98]"
           >
             <span>Book on BookMyShow</span>
@@ -125,6 +126,7 @@ export function WatchHero({
           {strip}
           <a
             href={bookUrl}
+            title="We can't read BookMyShow right now — open it and look for yourself"
             className="mt-5 flex min-h-[56px] items-center justify-between border-2 border-[#f3f2f2] px-4 text-base font-extrabold text-hazard-fg no-underline hover:bg-[#f3f2f2]/10"
           >
             <span>Check BookMyShow yourself</span>

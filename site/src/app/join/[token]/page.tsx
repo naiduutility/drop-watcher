@@ -58,6 +58,7 @@ function Dead({ kind }: { kind: keyof typeof DEAD }) {
         <div className="sticky bottom-0 bg-bg pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3">
           <a
             href={wa}
+            title="Open WhatsApp with a message asking for a fresh invite link"
             className="flex min-h-[54px] items-center justify-between bg-accent-600 px-4 text-[17px] font-extrabold text-white no-underline"
           >
             <span>Ask for a new link on WhatsApp</span>
