@@ -11,7 +11,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "invite": "tsx --env-file=.env.local scripts/invite.ts"
+    "invite": "tsx --env-file=.env.local scripts/invite.ts",
+    "status": "tsx --env-file=.env.local scripts/status.ts"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
