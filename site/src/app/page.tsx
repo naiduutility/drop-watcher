@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { ArrowUpRight, Bell, Plus } from "lucide-react";
 
@@ -6,6 +7,7 @@ import { currentUser } from "../lib/auth.js";
 import { db } from "../db/index.js";
 import { channels, subscriptions, targetDates, targets, users } from "../db/schema.js";
 import { showtimesUrl } from "../engine/index.js";
+import { channelFor } from "../notify/index.js";
 import {
   ago, byUrgency, minutesSince, summarise, watchState, type WatchView,
 } from "../lib/view.js";
@@ -18,7 +20,46 @@ import { listedButNotMine } from "../lib/narrowing.js";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+const APP_ORIGIN = "https://drop-watcher.vercel.app";
+
+export default async function Home({
+  searchParams,
+}: { searchParams: { test?: string } }) {
+  /**
+   * Send yourself a test alert.
+   *
+   * Subscribing to a topic is the one setup step that silently costs someone
+   * every alert they were promised — ntfy never tells us whether anyone is
+   * listening, so without this a new member has no way to know it worked short
+   * of waiting for a film to go on sale.
+   *
+   * Sent through the worker's own adapter, so a pass proves the real path
+   * rather than only that ntfy is reachable.
+   */
+  async function sendTest() {
+    "use server";
+    const me = await currentUser();
+    if (!me) return;
+    const mine = await db.select().from(channels)
+      .where(and(eq(channels.userId, me.id), eq(channels.active, true)));
+    if (mine.length === 0) redirect("/?test=nochannel");
+
+    let ok = false;
+    for (const row of mine) {
+      const result = await channelFor({ id: row.id, kind: row.kind, config: row.config })
+        .send({
+          title: "Drop Watcher: test alert",
+          body: "Your notifications are working. Real alerts look like this, "
+            + "with Book now and Got it buttons.",
+          clickUrl: APP_ORIGIN,
+          actions: [{ label: "Open Drop Watcher", url: APP_ORIGIN }],
+          priority: "high",
+        });
+      if (result.ok) ok = true;
+    }
+    redirect(ok ? "/?test=sent" : "/?test=failed");
+  }
+
   const user = await currentUser();
 
   if (!user) {
@@ -125,6 +166,20 @@ export default async function Home() {
       <AppHeader devices admin={user.isOwner} initial={name.charAt(0)} />
 
       <main className="mx-auto max-w-[1120px] px-4 pb-24 pt-4">
+        {searchParams.test ? (
+          <p
+            role="status"
+            className={`mb-3 border-2 px-3 py-2 text-[15px] font-semibold ${
+              searchParams.test === "sent" ? "border-ink" : "border-accent-700 text-accent-700"
+            }`}
+          >
+            {searchParams.test === "sent"
+              ? "Test alert sent. If it doesn't arrive, you're not subscribed to your topic yet."
+              : searchParams.test === "nochannel"
+                ? "You have no notification channel set up — nothing to send to."
+                : "ntfy refused the test. Try again, or check the topic below."}
+          </p>
+        ) : null}
         {watches.length > 0 ? (
           <HealthBanner blind={blind.length > 0} minutes={blindMinutes} lastCleanRead={ago(lastClean, now)} />
         ) : null}
@@ -161,8 +216,18 @@ export default async function Home() {
                 </a>
                 <p className="mt-2 text-[13px] text-neutral-700">
                   In the app, tap <strong>+</strong> and paste the topic if the link doesn&apos;t
-                  open it for you.
+                  open it for you. ntfy&apos;s free tier limits how many topics you can follow,
+                  so remove unused ones first if it refuses.
                 </p>
+                <form action={sendTest}>
+                  <button
+                    type="submit"
+                    className="mt-2 flex min-h-[44px] w-full items-center justify-between border-2 border-ink px-3.5 text-[15px] font-extrabold"
+                  >
+                    <span>Send me a test alert</span>
+                    <Bell size={18} strokeWidth={2.5} />
+                  </button>
+                </form>
               </li>
               <li className="border-b-2 border-divider py-5 md:border-b-0 md:border-r-2 md:px-5">
                 <span className="block text-[40px] font-extrabold leading-none text-accent">2</span>
@@ -206,6 +271,16 @@ export default async function Home() {
                 >
                   <ArrowUpRight size={18} strokeWidth={2.5} />
                 </a>
+                <form action={sendTest}>
+                  <button
+                    type="submit"
+                    aria-label="Send me a test alert"
+                    title="Send me a test alert"
+                    className="flex h-11 w-11 items-center justify-center border-2 border-divider text-ink"
+                  >
+                    <Bell size={18} strokeWidth={2.5} />
+                  </button>
+                </form>
               </span>
             </div>
           </>
