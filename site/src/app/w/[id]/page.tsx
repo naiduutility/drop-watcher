@@ -116,8 +116,21 @@ export default async function WatchDetail({ params }: { params: { id: string } }
     if (!who) return;
     // Scoped to the caller's own row: deleting yours can never touch a
     // friend's watch of the same film and date.
-    await db.delete(subscriptions)
-      .where(and(eq(subscriptions.id, params.id), eq(subscriptions.userId, who.id)));
+    const [dropped] = await db.delete(subscriptions)
+      .where(and(eq(subscriptions.id, params.id), eq(subscriptions.userId, who.id)))
+      .returning({ targetId: subscriptions.targetId });
+
+    // If that was the last person interested, stop scraping the film. The
+    // worker sweeps for this too, but doing it here means the log stops
+    // mentioning a deleted film immediately rather than at the next pass.
+    if (dropped) {
+      const [still] = await db.select({ id: subscriptions.id }).from(subscriptions)
+        .where(eq(subscriptions.targetId, dropped.targetId)).limit(1);
+      if (!still) {
+        await db.update(targets).set({ status: "retired" })
+          .where(eq(targets.id, dropped.targetId));
+      }
+    }
     redirect("/");
   }
 

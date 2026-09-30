@@ -201,7 +201,39 @@ async function applyEvents(
   }
 }
 
+/**
+ * Stop scraping films nobody watches any more.
+ *
+ * Deleting a watch removes the subscription, and the target it pointed at was
+ * left in the queue forever: claimed every pass, logged every pass, rescheduled
+ * every pass. It fetched nothing, because planFetches has no armed dates to ask
+ * about — so it was invisible in the alert path and only showed up as films in
+ * the log that had been deleted days ago.
+ *
+ * Retired, not deleted: the checks history is the thing that answers "why did
+ * this never fire?", the venue catalogue was built from these reads, and
+ * re-adding the film flips the same row back to active through the create
+ * flow's upsert.
+ *
+ * The test is zero SUBSCRIPTIONS, never zero *armed* subscriptions. A watch
+ * that has been silenced is still a watch, and retiring its target would quietly
+ * break the "Watch again" button it promises.
+ */
+export async function retireOrphans(): Promise<void> {
+  const gone = await db
+    .update(targets)
+    .set({ status: "retired" })
+    .where(and(
+      inArray(targets.status, ["active", "unresolved"]),
+      sql`not exists (select 1 from ${subscriptions} where ${subscriptions.targetId} = ${targets.id})`,
+    ))
+    .returning({ title: targets.title, city: targets.city });
+
+  for (const t of gone) console.log(`retired ${t.title} (${t.city}) - nobody watches it`);
+}
+
 export async function runPass(now = new Date()): Promise<void> {
+  await retireOrphans();
   const due = await claimDue(now);
   if (due.length === 0) {
     console.log("nothing due");

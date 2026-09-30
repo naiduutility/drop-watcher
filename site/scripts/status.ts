@@ -93,6 +93,22 @@ async function main() {
     console.log("");
   }
 
+  // Targets nobody watches. They cost no BookMyShow requests once retired, but
+  // an ACTIVE one with no subscribers is the bug that put deleted films back in
+  // the worker log, so it is worth saying out loud rather than filtering away.
+  const all = await db.select({ id: targets.id, title: targets.title, status: targets.status })
+    .from(targets);
+  const watched = new Set(subs.map((s) => s.targetId));
+  const orphans = all.filter((t) => !watched.has(t.id));
+  if (orphans.length > 0) {
+    console.log("=== not watched by anyone ===");
+    for (const o of orphans) {
+      console.log(`  ${o.status.padEnd(10)} ${o.title}`
+        + (o.status === "retired" ? "" : "   <-- still being scraped, should be retired"));
+    }
+    console.log("");
+  }
+
   console.log("=== reads in the last hour ===");
   if (recent.length === 0) {
     console.log("  NOTHING. The worker has not run — check the cron job.\n");
