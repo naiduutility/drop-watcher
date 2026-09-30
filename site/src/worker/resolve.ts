@@ -23,6 +23,10 @@ import { fetchShowtimes, sleep, type ContextProvider, PACING_MS } from "./fetch.
 
 export interface ResolveResult {
   bookCode: string | null;
+  /** Every date the winning probe said has shows. The earliest is the first
+   *  day the film can be booked, which for a big release is the premiere the
+   *  night before. */
+  offeredDates: string[];
   tried: { code: string; outcome: string }[];
 }
 
@@ -58,9 +62,9 @@ export async function resolveBookCode(
       break;
     }
     if (reading.outcome !== Outcome.BAD_CODE) {
-      return { bookCode: code, tried };
+      return { bookCode: code, offeredDates: [...reading.offeredDates], tried };
     }
   }
 
-  return { bookCode: null, tried };
+  return { bookCode: null, offeredDates: [], tried };
 }

@@ -132,8 +132,8 @@ export function WatchCard({ watch }: { watch: WatchView }) {
           <span className="text-sm text-neutral-700">{watch.city}</span>
         </Link>
         <p className="mt-2 text-[13px] leading-[1.4] text-neutral-700">
-          Watching the film&apos;s page. You&apos;ll hear the moment booking opens, then you pick
-          your dates.
+          Watching the film&apos;s page. When booking opens we take the first day listed and
+          tell you.
         </p>
       </article>
     );

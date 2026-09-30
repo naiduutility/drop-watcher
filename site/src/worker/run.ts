@@ -219,12 +219,17 @@ export async function runPass(now = new Date()): Promise<void> {
 ==== ${target.title} (${target.city}) — not on sale yet ====`);
         const opened = await checkUnresolved(target, provider, now);
         if (opened) {
-          console.log(`   BOOKING OPENED · code ${opened.bookCode}`);
+          console.log(`   BOOKING OPENED · code ${opened.bookCode}`
+            + (opened.showDate ? ` · now watching ${opened.showDate}` : " · no date to move to"));
+          const day = opened.showDate ? prettyDate(opened.showDate) : null;
           const message = {
             title: `${opened.title}: booking is OPEN`,
-            body:
-              `Tickets have gone on sale in ${opened.city}. Pick the dates you want and ` +
-              `we'll watch them.
+            body: day
+              ? `Tickets have gone on sale in ${opened.city}. You're now watching the first ` +
+                `day, ${day} — nothing to do.
+${APP_URL}/w/${opened.targetId}`
+              : `Tickets have gone on sale in ${opened.city}, but we couldn't tell which day ` +
+                `is first. Open it and pick.
 ${APP_URL}/w/${opened.targetId}`,
             clickUrl: `${APP_URL}/w/${opened.targetId}`,
             priority: "high" as const,

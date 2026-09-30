@@ -21,6 +21,8 @@ export interface OpenedFilm {
   title: string;
   city: string;
   bookCode: string;
+  /** The date the waiting watches were moved onto, if we could tell. */
+  showDate: string | null;
   userIds: string[];
 }
 
@@ -73,7 +75,7 @@ export async function checkUnresolved(
   }
 
   console.log(`   booking is OPEN - proving a code from ${read.candidates.length} candidate(s)`);
-  const { bookCode, tried } = await resolveBookCode(
+  const { bookCode, offeredDates, tried } = await resolveBookCode(
     target.movieUrl, read.candidates, target.language, provider, now,
   );
   console.log(`   tried: ${tried.map((t) => `${t.code}=${t.outcome}`).join(", ") || "none"}`);
@@ -92,6 +94,12 @@ export async function checkUnresolved(
     return null;
   }
 
+  // The first day it can be booked. Earliest listed rather than the advertised
+  // release date, because a premiere shows the night before release and that
+  // is the one worth having.
+  const firstDay = [...offeredDates].sort()[0]
+    ?? read.releaseDate ?? target.releaseDate ?? null;
+
   await db.update(targets).set({
     bookCode,
     status: "active",
@@ -103,15 +111,37 @@ export async function checkUnresolved(
   }).where(eq(targets.id, target.id));
 
   const waiting = await db
-    .select({ userId: subscriptions.userId })
+    .select()
     .from(subscriptions)
     .where(and(eq(subscriptions.targetId, target.id), eq(subscriptions.showDate, "*")));
+
+  // Move each waiting watch onto that first day, so nobody has to come back
+  // and pick a date at six in the morning. If the same date is already
+  // watched, the placeholder is simply dropped rather than duplicating it.
+  if (firstDay) {
+    for (const w of waiting) {
+      const clash = await db.select({ id: subscriptions.id }).from(subscriptions)
+        .where(and(
+          eq(subscriptions.userId, w.userId),
+          eq(subscriptions.targetId, target.id),
+          eq(subscriptions.showDate, firstDay),
+        )).limit(1);
+      if (clash.length > 0) {
+        await db.delete(subscriptions).where(eq(subscriptions.id, w.id));
+      } else {
+        await db.update(subscriptions)
+          .set({ showDate: firstDay, state: "armed", notifiedKeys: [], ackedKeys: [] })
+          .where(eq(subscriptions.id, w.id));
+      }
+    }
+  }
 
   return {
     targetId: target.id,
     title: target.title,
     city: target.city,
     bookCode,
+    showDate: firstDay,
     userIds: [...new Set(waiting.map((w) => w.userId))],
   };
 }

@@ -169,8 +169,9 @@ export default async function New({
             and tell you the moment booking opens in {parsed.city}.
           </p>
           <p className="mt-3 text-[15px] leading-[1.5] text-neutral-800">
-            You&apos;ll get one alert when it goes on sale. Then you pick the dates you want, the
-            same as any other watch.
+            The moment it goes on sale we move this watch onto the <strong>first day
+            listed</strong> — the premiere, when there is one — and tell you. Nothing for you to
+            do at six in the morning. Other dates you can add yourself afterwards.
           </p>
           <form action={watchUnreleased} className="mt-6">
             <input type="hidden" name="url" value={pasted} />

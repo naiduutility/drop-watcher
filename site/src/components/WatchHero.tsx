@@ -164,8 +164,8 @@ export function WatchHero({
           <p className="mt-1 text-[15px] text-neutral-700">{city}</p>
           <p className="mt-4 text-[15px] leading-[1.5] text-neutral-800">
             BookMyShow has no Book tickets button for this film yet, so there are no dates to
-            watch. We read the film&apos;s own page about once an hour, and the moment booking
-            opens you&apos;ll get one alert — then you choose your dates.
+            watch. We read the film&apos;s own page on your chosen schedule, and the moment
+            booking opens this watch moves onto the first day listed and alerts you.
           </p>
           {strip}
         </div>
