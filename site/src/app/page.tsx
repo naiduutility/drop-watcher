@@ -147,13 +147,22 @@ export default async function Home() {
                   it we have nowhere to reach you.
                 </p>
                 <div className="mt-3"><CopyField value={topic} big /></div>
+                {/* The TOPIC's url, not ntfy's app root. The root opens an
+                    empty inbox with nothing selected, so there is no subscribe
+                    button for a topic it has never heard of. This one opens
+                    the topic itself, and deep-links into the phone app when it
+                    is installed. */}
                 <a
-                  href="https://ntfy.sh/app"
+                  href={`https://ntfy.sh/${topic}`}
                   className="mt-2 flex min-h-[44px] items-center justify-between border-2 border-divider px-3.5 text-[15px] font-extrabold text-ink no-underline"
                 >
-                  <span>Open ntfy and subscribe</span>
+                  <span>Open this topic in ntfy</span>
                   <ArrowUpRight size={18} strokeWidth={2.5} />
                 </a>
+                <p className="mt-2 text-[13px] text-neutral-700">
+                  In the app, tap <strong>+</strong> and paste the topic if the link doesn&apos;t
+                  open it for you.
+                </p>
               </li>
               <li className="border-b-2 border-divider py-5 md:border-b-0 md:border-r-2 md:px-5">
                 <span className="block text-[40px] font-extrabold leading-none text-accent">2</span>
@@ -188,7 +197,16 @@ export default async function Home() {
                 <Bell size={16} strokeWidth={2.5} className="shrink-0" />
                 <span className="truncate">Your alerts go to ntfy topic</span>
               </span>
-              <span className="shrink-0"><CopyField value={topic} /></span>
+              <span className="flex shrink-0 items-center gap-2">
+                <CopyField value={topic} />
+                <a
+                  href={`https://ntfy.sh/${topic}`}
+                  aria-label="Open this topic in ntfy"
+                  className="flex h-11 w-11 items-center justify-center border-2 border-divider text-ink no-underline"
+                >
+                  <ArrowUpRight size={18} strokeWidth={2.5} />
+                </a>
+              </span>
             </div>
           </>
         )}
