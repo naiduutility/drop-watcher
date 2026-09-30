@@ -81,6 +81,12 @@ export default async function New({
    */
   async function watchUnreleased(form: FormData) {
     "use server";
+    // Chosen by the person, not inferred. A form field is public input, so an
+    // unrecognised value falls back rather than reaching the scheduler.
+    function pickPriority(raw: FormDataEntryValue | null): "hot" | "normal" | "cold" {
+      const v = String(raw ?? "");
+      return v === "hot" || v === "normal" || v === "cold" ? v : "hot";
+    }
     const me = await currentUser();
     if (!me) return;
     const p = parseBmsUrl(String(form.get("url") ?? ""));
@@ -91,9 +97,7 @@ export default async function New({
       title: String(form.get("title") ?? "").trim() || p.slug.replace(/-/g, " "),
       movieUrl: p.movieUrl, pageCode: p.pageCode, bookCode: "",
       language: null, status: "unresolved",
-      // Starts eager and is re-rated from the film page's own release date on
-      // the first read: a film out tomorrow ends up hot, one in December cold.
-      priority: "normal", createdBy: me.id,
+      priority: pickPriority(form.get("priority")), createdBy: me.id,
     }).onConflictDoUpdate({
       target: [targets.city, targets.bookCode, targets.language],
       set: { status: "unresolved" },
@@ -170,7 +174,36 @@ export default async function New({
           </p>
           <form action={watchUnreleased} className="mt-6">
             <input type="hidden" name="url" value={pasted} />
-            <label className="block">
+
+            <span className="text-[11px] font-extrabold uppercase tracking-kicker text-neutral-700">
+              How often should we look?
+            </span>
+            <div className="mt-2 grid grid-cols-3 border-2 border-ink">
+              {[
+                { v: "hot", label: "Every 5 min", note: "a drop any day now" },
+                { v: "normal", label: "Every 10 min", note: "out within a fortnight" },
+                { v: "cold", label: "Hourly", note: "months away" },
+              ].map((o, i) => (
+                <label
+                  key={o.v}
+                  className={`flex min-h-[64px] cursor-pointer flex-col items-center justify-center px-2 text-center ${
+                    i > 0 ? "border-l-2 border-ink" : ""
+                  } has-[:checked]:bg-ink has-[:checked]:text-bg`}
+                >
+                  <input type="radio" name="priority" value={o.v}
+                         defaultChecked={o.v === "hot"} className="sr-only" />
+                  <span className="text-[15px] font-extrabold">{o.label}</span>
+                  <span className="mt-0.5 text-[11px] opacity-70">{o.note}</span>
+                </label>
+              ))}
+            </div>
+            <p className="mt-2 text-[13px] text-neutral-700">
+              Five minutes is as fast as the watcher runs. Slower settings exist because every
+              request is one the on-sale watches need too — BookMyShow refuses roughly half of
+              them as it is.
+            </p>
+
+            <label className="mt-5 block">
               <span className="text-[11px] font-extrabold uppercase tracking-kicker text-neutral-700">
                 Name in your alerts
               </span>
@@ -187,11 +220,7 @@ export default async function New({
               <span>Tell me when booking opens</span>
             </button>
           </form>
-          <p className="mt-4 text-[13px] text-neutral-700">
-            How often we look follows the release date on BookMyShow: every few minutes when
-            it&apos;s days away, hourly when it&apos;s months off. It speeds itself up as the
-            date approaches.
-          </p>
+
         </main>
       </>
     );

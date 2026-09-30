@@ -75,21 +75,21 @@ export function AddStep1({ initial = "" }: { initial?: string }) {
         {kind === "movie" ? (
           <div className="mt-3 bg-accent-100 p-4 text-accent-900">
             <span className="text-[11px] font-extrabold uppercase tracking-kicker">
-              Nearly · one more step
+              That&apos;s the film&apos;s page
             </span>
             <h2 className="mt-1 text-[22px] font-extrabold leading-[1.1] tracking-tight1">
-              That&apos;s the film&apos;s page. We need the page after it.
+              No dates to pick yet — but we can watch for them.
             </h2>
             <p className="mt-2 text-[15px] leading-[1.45]">
-              The film page doesn&apos;t carry the booking code, and guessing it produces a watch
-              that stays silent forever. Thirty seconds fixes it:
+              This page carries no booking code, so there are no dates to choose. Continue and
+              we&apos;ll watch the film&apos;s page instead, and tell you the moment booking
+              opens.
             </p>
-            <ol className="mt-3 space-y-1.5 text-[15px]">
-              <li><strong>1.</strong> Open the film on BookMyShow</li>
-              <li><strong>2.</strong> Tap <strong>Book tickets</strong></li>
-              <li><strong>3.</strong> Pick any date at all</li>
-              <li><strong>4.</strong> Copy the address bar and paste it here</li>
-            </ol>
+            <p className="mt-3 text-[15px] leading-[1.45]">
+              <strong>Already on sale?</strong> Then paste the showtimes link instead and you can
+              pick your dates right now: open the film, tap <strong>Book tickets</strong>, pick
+              any date, and copy the address bar.
+            </p>
           </div>
         ) : null}
 
@@ -147,10 +147,10 @@ export function AddStep1({ initial = "" }: { initial?: string }) {
         <div className="mx-auto w-full max-w-[720px]">
         <button
           type="submit"
-          disabled={kind !== "showtimes"}
+          disabled={kind !== "showtimes" && kind !== "movie"}
           className="flex min-h-[54px] w-full items-center justify-between bg-accent-600 px-4 text-[17px] font-extrabold text-white transition-transform duration-75 active:scale-[.98] disabled:opacity-45"
         >
-          <span>Continue</span>
+          <span>{kind === "movie" ? "Watch for booking to open" : "Continue"}</span>
           <ArrowRight size={20} strokeWidth={2.5} />
         </button>
         </div>

@@ -87,32 +87,3 @@ export function planFetches(input: FetchPlanInput): string[] {
   const offered = new Set(input.offeredDates);
   return [earliest, ...rest.filter((d) => offered.has(d))];
 }
-
-/**
- * How often an unreleased film is worth checking, from its release date.
- *
- * A film in December does not need looking at every five minutes, and every
- * request spends a budget the on-sale watches need more. But booking usually
- * opens a few days before release, so as that date approaches the same watch
- * should speed up on its own rather than waiting for somebody to notice.
- *
- * Unknown release date is treated as near: better to spend a few extra reads
- * than to check a film hourly on the day its tickets drop.
- */
-export function priorityForRelease(
-  releaseDate: string | null, now = new Date(),
-): Priority {
-  if (!releaseDate) return "normal";
-  const y = Number(releaseDate.slice(0, 4));
-  const m = Number(releaseDate.slice(4, 6)) - 1;
-  const d = Number(releaseDate.slice(6, 8));
-  const release = new Date(y, m, d);
-  if (Number.isNaN(release.getTime())) return "normal";
-
-  const days = Math.ceil((release.getTime() - now.getTime()) / 86_400_000);
-  // Released already, or within three days: booking can open at any moment.
-  if (days <= 3) return "hot";
-  // Inside a fortnight: booking is plausible soon.
-  if (days <= 14) return "normal";
-  return "cold";
-}

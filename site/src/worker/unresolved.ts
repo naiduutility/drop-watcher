@@ -12,7 +12,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checks, subscriptions, targets } from "../db/schema.js";
 import { MovieOutcome, Outcome, readMoviePage } from "../engine/index.js";
-import { nextDueAt, priorityForRelease, type Priority } from "../core/schedule.js";
+import { nextDueAt, type Priority } from "../core/schedule.js";
 import { fetchPage, type ContextProvider } from "./fetch.js";
 import { resolveBookCode } from "./resolve.js";
 
@@ -59,19 +59,13 @@ export async function checkUnresolved(
   const failures = conclusive ? 0 : target.consecutiveInconclusive + 1;
 
   if (read.outcome !== MovieOutcome.OPEN) {
-    // Re-rated on every read, so a film creeping towards its release date
-    // speeds itself up without anyone noticing it needs to.
-    const priority = conclusive
-      ? priorityForRelease(read.releaseDate ?? target.releaseDate, now)
-      : (target.priority as Priority);
-    if (priority !== target.priority) {
-      console.log(`   release ${read.releaseDate ?? target.releaseDate ?? "unknown"} -> checking ${priority}`);
-    }
+    // The cadence is the person's choice and is never overridden here. The
+    // release date is still recorded, but only so the watch can show it.
+    const priority = target.priority as Priority;
     await db.update(targets).set({
       lastCheckedAt: now,
       lastOkAt: conclusive ? now : target.lastOkAt,
       consecutiveInconclusive: failures,
-      priority,
       releaseDate: read.releaseDate ?? target.releaseDate,
       nextDueAt: nextDueAt({ priority, consecutiveInconclusive: failures, now }),
     }).where(eq(targets.id, target.id));

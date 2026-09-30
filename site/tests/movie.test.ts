@@ -12,7 +12,6 @@
  */
 
 import { MovieOutcome, readMoviePage, releaseDateFrom } from "../src/engine/movie.js";
-import { priorityForRelease } from "../src/core/schedule.js";
 
 const CHROME = "Drop Watcher sample page. ".repeat(60); // > 500 chars of body
 
@@ -107,13 +106,6 @@ check("buried in other text",
 check("absent", releaseDateFrom("no date here"), null);
 check("nonsense month", releaseDateFrom("Releasing on 32 Foo, 2026"), null);
 
-const TODAY = new Date(2026, 8, 30);
-check("out tomorrow: every pass", priorityForRelease("20261001", TODAY), "hot");
-check("out today", priorityForRelease("20260930", TODAY), "hot");
-check("already out, still no booking", priorityForRelease("20260925", TODAY), "hot");
-check("next week", priorityForRelease("20261007", TODAY), "normal");
-check("December", priorityForRelease("20261218", TODAY), "cold");
-check("unknown date errs eager, not lazy", priorityForRelease(null, TODAY), "normal");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
