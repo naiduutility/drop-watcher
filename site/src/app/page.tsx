@@ -49,8 +49,9 @@ export default async function Home({
       const result = await channelFor({ id: row.id, kind: row.kind, config: row.config })
         .send({
           title: "Drop Watcher: test alert",
-          body: "Your notifications are working. Real alerts look like this, "
-            + "with Book now and Got it buttons.",
+          body: "Your notifications are working. A real alert opens BookMyShow "
+            + "straight away so you can book; this one opens Drop Watcher because "
+            + "there is nothing to book yet.",
           clickUrl: APP_ORIGIN,
           actions: [{ label: "Open Drop Watcher", url: APP_ORIGIN }],
           priority: "high",

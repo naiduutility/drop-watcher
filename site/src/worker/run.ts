@@ -92,8 +92,11 @@ function messageFor(
       body:
         `We have not managed a clean read ${age}, so we cannot tell you ` +
         `whether tickets are out. This is us failing, not a quiet box office.\n\n` +
-        `Details: ${APP_URL}/targets/${event.targetId}`,
-      clickUrl: `${APP_URL}/targets/${event.targetId}`,
+        `Your watches: ${APP_URL}/`,
+      // Home, not a per-target page: there is no such route, and the health
+      // banner there says exactly this in context, across every watch it
+      // affects. A notification that 404s is worse than no link at all.
+      clickUrl: `${APP_URL}/`,
       priority: "normal",
     };
   }
@@ -222,17 +225,30 @@ export async function runPass(now = new Date()): Promise<void> {
           console.log(`   BOOKING OPENED · code ${opened.bookCode}`
             + (opened.showDate ? ` · now watching ${opened.showDate}` : " · no date to move to"));
           const day = opened.showDate ? prettyDate(opened.showDate) : null;
+          // Straight to BookMyShow, not to us. Tickets have just gone on sale:
+          // the only thing anybody wants from this notification is a seat, and
+          // every tap between the alert and the booking page is a tap during
+          // the minutes when the good ones go.
+          const bookNow = opened.showDate
+            ? showtimesUrl(target.movieUrl, opened.showDate, {
+                bookCode: opened.bookCode, language: target.language,
+              })
+            : target.movieUrl;
           const message = {
             title: `${opened.title}: booking is OPEN`,
             body: day
-              ? `Tickets have gone on sale in ${opened.city}. You're now watching the first ` +
-                `day, ${day} — nothing to do.
-${APP_URL}/w/${opened.targetId}`
-              : `Tickets have gone on sale in ${opened.city}, but we couldn't tell which day ` +
-                `is first. Open it and pick.
-${APP_URL}/w/${opened.targetId}`,
-            clickUrl: `${APP_URL}/w/${opened.targetId}`,
+              ? `Tickets are on sale in ${opened.city}. Book the first day, ${day} — ` +
+                `we're already watching it for you.
+${bookNow}`
+              : `Tickets are on sale in ${opened.city}. We couldn't tell which day is ` +
+                `first, so pick one on BookMyShow.
+${bookNow}`,
+            clickUrl: bookNow,
             priority: "high" as const,
+            actions: [
+              { label: "Book now", url: bookNow },
+              { label: "Open watch", url: `${APP_URL}/w/${opened.targetId}` },
+            ],
           };
           const rows = await db.select().from(channels)
             .where(and(inArray(channels.userId, opened.userIds), eq(channels.active, true)));
